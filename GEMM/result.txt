@@ -1,0 +1,18 @@
+Starting GEMM Benchmark...
+Matrix Size: M=4096, N=4096, K=4096
+--------------------------------------------------------
+Running: cuBLAS SGEMM (Reference / Upper Bound)
+  [Correctness] Skipped (Used as Reference).
+  [Performance] Avg Time: 2.061 ms
+  [Performance] Throughput: 66.687 TFLOPs
+--------------------------------------------------------
+Running: SGEMM_Naive
+  [Correctness] Pass! (Max error: 0.000)
+  [Performance] Avg Time: 18.380 ms
+  [Performance] Throughput: 7.477 TFLOPs
+--------------------------------------------------------
+Running: SGEMM_SharedMemory
+  [Correctness] Pass! (Max error: 0.000)
+  [Performance] Avg Time: 15.051 ms
+  [Performance] Throughput: 9.132 TFLOPs
+--------------------------------------------------------

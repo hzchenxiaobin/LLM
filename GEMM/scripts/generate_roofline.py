@@ -133,7 +133,7 @@ def generate_roofline():
     plt.tight_layout()
     
     # 保存图像
-    output_path = '/home/chenb/code/master/LLM/GEMM/docs/roofline_plot.png'
+    output_path = '/home/chenb/code/master/LLM/GEMM/images/roofline_plot.png'
     plt.savefig(output_path, dpi=150, bbox_inches='tight', facecolor='white')
     print(f"\nRoofline plot saved to: {output_path}")
     

@@ -233,7 +233,7 @@ Roofline 模型直观展示了 kernel 性能与硬件极限的关系：
 
 ### 4.2 Kernel 在 Roofline 图上的位置
 
-![Roofline Plot](roofline_plot.png)
+![Roofline Plot](../images/roofline_plot.png)
 
 **ASCII 示意图**：
 
