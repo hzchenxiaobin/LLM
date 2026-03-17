@@ -11,9 +11,9 @@ plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'SimHei', 'Arial Unicode MS']
 plt.rcParams['axes.unicode_minus'] = False
 
 def generate_roofline():
-    # GPU 硬件参数 (NVIDIA A100)
-    peak_flops = 19.5e3  # 19.5 TFLOPS = 19500 GFLOPS
-    memory_bw = 1555  # 1555 GB/s
+    # GPU 硬件参数 (NVIDIA RTX 5090)
+    peak_flops = 104.88e3  # 104.88 TFLOPS = 104880 GFLOPS
+    memory_bw = 1792  # 1792 GB/s (GDDR7)
     ridge_point = peak_flops / memory_bw  # Ridge Point
 
     # 矩阵参数
@@ -35,9 +35,9 @@ def generate_roofline():
     print(f"Roofline Analysis for SGEMM Kernels")
     print(f"Matrix Size: M={M}, N={N}, K={K}")
     print(f"=" * 60)
-    print(f"\nGPU: NVIDIA A100")
+    print(f"\nGPU: NVIDIA RTX 5090")
     print(f"  Peak FP32 Performance: {peak_flops/1e3:.1f} TFLOPS")
-    print(f"  Memory Bandwidth: {memory_bw} GB/s")
+    print(f"  Memory Bandwidth: {memory_bw} GB/s (GDDR7)")
     print(f"  Ridge Point: {ridge_point:.1f} FLOPs/byte")
     print(f"\nKernel Analysis:")
     print(f"  {'Kernel':<20} {'AI (FLOPs/byte)':<20} {'Theoretical GFLOPS':<20}")
@@ -65,7 +65,7 @@ def generate_roofline():
     roofline = np.minimum(memory_limited, compute_limited)
     
     # 绘制 Roofline
-    ax.loglog(ai_range, roofline, 'k-', linewidth=2.5, label='Roofline (A100)')
+    ax.loglog(ai_range, roofline, 'k-', linewidth=2.5, label='Roofline (RTX 5090)')
     
     # 填充区域
     ax.fill_between(ai_range, 0, roofline, alpha=0.1, color='gray')
@@ -111,7 +111,7 @@ def generate_roofline():
     # 设置坐标轴
     ax.set_xlabel('Arithmetic Intensity (FLOPs/byte)', fontsize=12, fontweight='bold')
     ax.set_ylabel('Performance (GFLOPS)', fontsize=12, fontweight='bold')
-    ax.set_title('Roofline Model: SGEMM Kernel Performance Analysis\n(NVIDIA A100, M=N=K=4096)', 
+    ax.set_title('Roofline Model: SGEMM Kernel Performance Analysis\n(NVIDIA RTX 5090, M=N=K=4096)', 
                  fontsize=14, fontweight='bold', pad=20)
     
     # 设置刻度范围

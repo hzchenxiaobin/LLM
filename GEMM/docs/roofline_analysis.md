@@ -191,19 +191,27 @@ $$AI_{shared} = \frac{2M^3}{3M^2 \times 4} = \frac{2M}{12} = \frac{M}{6} \text{ 
 
 | 参数 | 数值 | 说明 |
 |------|------|------|
-| 峰值算力 (FP32) | 19.5 TFLOPS | 理论最大计算性能 |
-| 显存带宽 | 1555 GB/s (HBM2e) | 理论最大内存带宽 |
-| **Ridge Point** | $\frac{19.5 \times 10^{12}}{1555 \times 10^9} \approx 12.5$ FLOPs/byte | 计算与内存受限的分界点 |
+| 峰值算力 (FP32) | 104.9 TFLOPS | 理论最大计算性能 |
+| 显存带宽 | 1,792 GB/s (GDDR7) | 理论最大内存带宽 |
+| **Ridge Point** | $\frac{104.9 \times 10^{12}}{1792 \times 10^9} \approx 58.5$ FLOPs/byte | 计算与内存受限的分界点 |
 
-**Ridge Point**：当 AI < 12.5 时，性能受内存带宽限制；当 AI > 12.5 时，性能受计算能力限制。
+**Ridge Point**：当 AI < 58.5 时，性能受内存带宽限制；当 AI > 58.5 时，性能受计算能力限制。
 
-### 3.2 典型消费级 GPU 参数（以 RTX 4090 为例）
+### 3.2 对比：NVIDIA RTX 4090 参数
 
 | 参数 | 数值 | 说明 |
 |------|------|------|
 | 峰值算力 (FP32) | 82.6 TFLOPS | 理论最大计算性能 |
 | 显存带宽 | 1008 GB/s (GDDR6X) | 理论最大内存带宽 |
 | **Ridge Point** | $\frac{82.6 \times 10^{12}}{1008 \times 10^9} \approx 81.9$ FLOPs/byte | 计算与内存受限的分界点 |
+
+### 3.3 RTX 5090 相比 RTX 4090 的提升
+
+| 参数 | RTX 4090 | RTX 5090 | 提升倍数 |
+|------|----------|----------|---------|
+| 峰值算力 | 82.6 TFLOPS | 104.9 TFLOPS | 1.27x |
+| 显存带宽 | 1008 GB/s | 1792 GB/s | 1.78x |
+| Ridge Point | 81.9 | 58.5 | 更低（更容易达到计算受限）|
 
 ### 3.3  Roofline 模型公式
 
@@ -232,28 +240,28 @@ Roofline 模型直观展示了 kernel 性能与硬件极限的关系：
 ```
 Performance (GFLOPS)
     |
-    |        Peak FLOPS (A100: 19,500)
+    |        Peak FLOPS (RTX 5090: 104,900)
     |        ________________________________
     |       /
-    |      /  <-- Ridge Point (AI ≈ 12.5)
+    |      /  <-- Ridge Point (AI ≈ 58.5)
     |     /
     |    /
     |   / Memory Bandwidth Line
-    |  / (Slope = 1555 GB/s)
+    |  / (Slope = 1792 GB/s)
     | /
     |/________________________________________
      |                                        \\ 
-     |  ○ Naive (AI=0.5, ~778 GFLOPS理论)      \\  ○ Shared Memory (AI=682, 充分利用算力)
+     |  ○ Naive (AI=0.5, ~896 GFLOPS理论)      \\  ○ Shared Memory (AI=683, 充分利用算力)
      |                                          \\__________________________________
      |                                                                           AI (FLOPs/byte)
      0.1         1          10        100        1000       10000
 ```
 
 **关键观察**：
-- **Naive Kernel**：AI ≈ 0.5，位于内存带宽限制区，理论性能仅 ~778 GFLOPS（受带宽限制）
-- **Shared Memory Kernel**：AI ≈ 683，已超过 Ridge Point，可充分利用峰值算力 ~19,500 GFLOPS
+- **Naive Kernel**：AI ≈ 0.5 << 58.5，位于内存带宽限制区，理论性能仅 ~896 GFLOPS（严重受带宽限制）
+- **Shared Memory Kernel**：AI ≈ 683 >> 58.5，已超过 Ridge Point，可充分利用峰值算力 ~104,880 GFLOPS
 
-**性能差距**：约 25 倍（理论上）
+**性能差距**：约 **117 倍**（理论上）
 
 ---
 
@@ -265,7 +273,8 @@ Performance (GFLOPS)
 |------|-------|---------------|------|
 | **全局内存访问次数** | $O(M \times K \times N)$ | $O(M \times K + K \times N)$ | 减少 $N$ 或 $M$ 倍 |
 | **Arithmetic Intensity** | ~0.5 | ~683 | 1365 倍 |
-| **内存带宽限制** | 严重受限 | 不受限 | 突破带宽瓶颈 |
+| **内存带宽限制** | 严重受限 (AI << 58.5) | 不受限 (AI >> 58.5) | 突破带宽瓶颈 |
+| **理论性能** | ~896 GFLOPS | ~104,880 GFLOPS | **117 倍** |
 | **数据局部性** | 无 | 通过共享内存实现 | 缓存友好 |
 | **线程协作** | 无 | Block 内线程协作加载 | 减少重复访问 |
 
@@ -279,9 +288,10 @@ Performance (GFLOPS)
    - 通过分块 (Tiling) 技术，使每个从全局内存加载的数据元素被多次计算复用
    - AI 从 <1 提升到数百，远超 Ridge Point
 
-3. **利用共享内存特性**：
-   - 共享内存延迟低（~20-30 cycles）vs 全局内存（~400-800 cycles）
-   - 共享内存带宽高（~10 TB/s per SM）vs 全局内存（~1.5 TB/s）
+3. **利用共享内存特性**（RTX 5090 / Blackwell 架构）：
+   - 共享内存延迟低（~20-30 cycles）vs 全局内存（~300-500 cycles，GDDR7）
+   - 共享内存带宽高（~10+ TB/s per SM）vs 全局内存（1.79 TB/s）
+   - GDDR7 提供更高带宽，但 AI 过低的 kernel 仍无法充分利用
 
 ### 5.3 进一步优化空间
 
@@ -297,8 +307,8 @@ Performance (GFLOPS)
 
 1. Williams, S., Waterman, A., & Patterson, D. (2009). Roofline: an insightful visual performance model for multicore architectures. Communications of the ACM, 52(4), 65-76.
 2. NVIDIA CUDA Best Practices Guide - Memory Optimization
-3. NVIDIA A100 Tensor Core GPU Architecture Whitepaper
+3. NVIDIA GeForce RTX 5090 Specifications (2025)
 
 ---
 
-*分析生成时间：2026年3月17日*
+*分析更新时间：2026年3月17日（RTX 5090 版本）*
