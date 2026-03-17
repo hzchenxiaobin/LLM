@@ -9,7 +9,7 @@ LIBS = -lcublas
 TARGET = benchmark_gemm
 
 # 需要编译的源文件对应的目标对象文件
-OBJS = main.o gemm_kernels.o
+OBJS = main.o gemm_kernels.o sgemm_naive.o
 
 # 默认构建目标
 all: $(TARGET)
@@ -25,6 +25,10 @@ main.o: main.cu common.h gemm_kernels.h
 # 编译算子实现文件
 gemm_kernels.o: gemm_kernels.cu common.h gemm_kernels.h
 	$(NVCC) $(NVCC_FLAGS) -c gemm_kernels.cu
+
+# 编译朴素 GEMM 文件
+sgemm_naive.o: sgemm_naive.cu common.h gemm_kernels.h
+	$(NVCC) $(NVCC_FLAGS) -c sgemm_naive.cu
 
 # 清理编译产物
 clean:
