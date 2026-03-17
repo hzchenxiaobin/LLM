@@ -1,0 +1,36 @@
+# 编译产物
+*.o
+*.obj
+*.out
+*.exe
+benchmark_gemm
+
+# CUDA 相关
+*.ptx
+*.cubin
+*.fatbin
+
+# IDE 配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志和临时文件
+*.log
+*.tmp
+*.bak
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 核心转储
+core
+core.*
+
+# 构建目录
+build/
+dist/
+cmake-build-*/
