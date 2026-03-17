@@ -9,7 +9,7 @@ LIBS = -lcublas
 TARGET = benchmark_gemm
 
 # 需要编译的源文件对应的目标对象文件
-OBJS = main.o sgemm_cublas.o sgemm_naive.o sgemm_shared.o
+OBJS = main.o sgemm_cublas.o sgemm_naive.o sgemm_shared.o sgemm_register.o
 
 # 默认构建目标
 all: $(TARGET)
@@ -33,6 +33,10 @@ sgemm_naive.o: sgemm_naive.cu common.h gemm_kernels.h
 # 编译共享内存 GEMM 文件
 sgemm_shared.o: sgemm_shared.cu common.h gemm_kernels.h
 	$(NVCC) $(NVCC_FLAGS) -c sgemm_shared.cu
+
+# 编译寄存器分块 GEMM 文件
+sgemm_register.o: sgemm_register.cu common.h gemm_kernels.h
+	$(NVCC) $(NVCC_FLAGS) -c sgemm_register.cu
 
 # 清理编译产物
 clean:

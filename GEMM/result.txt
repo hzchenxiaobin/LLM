@@ -1,18 +1,26 @@
-Starting GEMM Benchmark...
-Matrix Size: M=4096, N=4096, K=4096
+========================================================
+
+开始 GEMM 性能基准测试...
+矩阵尺寸: M=4096, N=4096, K=4096
 --------------------------------------------------------
-Running: cuBLAS SGEMM (Reference / Upper Bound)
-  [Correctness] Skipped (Used as Reference).
-  [Performance] Avg Time: 2.061 ms
-  [Performance] Throughput: 66.687 TFLOPs
+正在运行: cuBLAS SGEMM (Reference / Upper Bound)
+  [正确性检查] 跳过 (作为标准参考答案).
+  [性能统计] 平均耗时: 2.039 ms
+  [算力吞吐] 实际算力: 67.421 TFLOPs (达理论峰值的 62.42%)
 --------------------------------------------------------
-Running: SGEMM_Naive
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: 18.380 ms
-  [Performance] Throughput: 7.477 TFLOPs
+正在运行: SGEMM_Naive
+  [正确性检查] 通过! (最大误差: 0.00)
+  [性能统计] 平均耗时: 18.470 ms
+  [算力吞吐] 实际算力: 7.441 TFLOPs (达理论峰值的 6.89%)
 --------------------------------------------------------
-Running: SGEMM_SharedMemory
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: 15.051 ms
-  [Performance] Throughput: 9.132 TFLOPs
+正在运行: SGEMM_SharedMemory
+  [正确性检查] 通过! (最大误差: 0.00)
+  [性能统计] 平均耗时: 15.072 ms
+  [算力吞吐] 实际算力: 9.119 TFLOPs (达理论峰值的 8.44%)
 --------------------------------------------------------
+正在运行: SGEMM_RegisterTiling
+  [正确性检查] 通过! (最大误差: 0.00)
+  [性能统计] 平均耗时: 3.078 ms
+  [算力吞吐] 实际算力: 44.655 TFLOPs (达理论峰值的 41.34%)
+--------------------------------------------------------
+测试完成.

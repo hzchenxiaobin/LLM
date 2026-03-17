@@ -183,6 +183,9 @@ int main() {
     // 2. Shared Memory 版本
     benchmark_gemm("SGEMM_SharedMemory", run_sgemm_shared, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
+    // 3. Register Tiling 版本
+    benchmark_gemm("SGEMM_RegisterTiling", run_sgemm_register, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;
 
