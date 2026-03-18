@@ -19,11 +19,12 @@ LLM/
     ├── sgemm_register.cu  # 寄存器分块优化
     ├── sgemm_cublas.cu    # cuBLAS 参考实现
     ├── docs/              # 详细文档
-    │   ├── roofline_analysis.md
-    │   ├── sgemm_shared_kernel_explained.md
-    │   ├── sgemm_register_analysis.md
-    │   ├── sgemm_register_code_explanation.md
-    │   └── cuda_thread_hierarchy.md
+    │   ├── cuda_thread_hierarchy.md      # CUDA 线程层次详解
+    │   ├── roofline_analysis.md          # Roofline 性能模型
+    │   ├── rtx5090_hardware_constraints.md # RTX 5090 硬件约束
+    │   ├── sgemm_register_analysis.md     # 寄存器优化性能分析
+    │   ├── sgemm_register_code_explanation.md # 寄存器 Kernel 逐行解读
+    │   └── sgemm_shared_kernel_explained.md # 共享内存 Kernel 详解
     ├── images/            # 图解和图表
     └── scripts/           # 可视化脚本
 ```
@@ -44,8 +45,8 @@ LLM/
 ## 🚀 快速开始
 
 ### 环境要求
-- NVIDIA GPU (Compute Capability 7.0+)
-- CUDA Toolkit 11.0+
+- NVIDIA GPU (Compute Capability 7.0+, 推荐 8.0+)
+- CUDA Toolkit 11.0+ (RTX 5090 需要 12.8+)
 - make
 
 ### 进入 GEMM 项目并编译
@@ -64,8 +65,10 @@ make
 ## 📚 学习资源
 
 - [GEMM 详细教程](./GEMM/README.md) - 完整的优化教程文档
+- [RTX 5090 硬件约束详解](./GEMM/docs/rtx5090_hardware_constraints.md) - 硬件架构与优化策略
 - [Roofline 性能分析](./GEMM/docs/roofline_analysis.md)
 - [CUDA 线程层次详解](./GEMM/docs/cuda_thread_hierarchy.md)
+- [寄存器 Kernel 逐行解读](./GEMM/docs/sgemm_register_code_explanation.md)
 
 ## 📊 性能基准
 
