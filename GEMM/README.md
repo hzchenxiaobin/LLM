@@ -26,6 +26,7 @@ C = alpha × A × B + beta × C
 | **Naive** | `src/sgemm_naive.cu` | 无优化，直接实现 | ~7 TFLOPS |
 | **Shared Memory** | `src/sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
 | **Register** | `src/sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
+| **Register V2** | `src/sgemm_register_v2.cu` | 向量化加载 + Padding 优化 | ~35-55 TFLOPS |
 
 ### 硬件要求
 
@@ -47,6 +48,7 @@ GEMM/
 │   ├── sgemm_naive.cu           # 朴素实现
 │   ├── sgemm_shared.cu          # 共享内存优化实现
 │   ├── sgemm_register.cu        # 寄存器分块优化实现
+│   ├── sgemm_register_v2.cu     # 优化版寄存器分块 (向量化 + Padding)
 │   └── sgemm_cublas.cu          # cuBLAS 参考实现
 │
 ├── docs/                        # 技术文档目录
@@ -108,7 +110,8 @@ nvcc -O3 -c src/sgemm_cublas.cu -o src/sgemm_cublas.o
 nvcc -O3 -c src/sgemm_naive.cu -o src/sgemm_naive.o
 nvcc -O3 -c src/sgemm_shared.cu -o src/sgemm_shared.o
 nvcc -O3 -c src/sgemm_register.cu -o src/sgemm_register.o
-nvcc -O3 src/main.o src/sgemm_cublas.o src/sgemm_naive.o src/sgemm_shared.o src/sgemm_register.o -o benchmark_gemm -lcublas
+nvcc -O3 -c src/sgemm_register_v2.cu -o src/sgemm_register_v2.o
+nvcc -O3 src/main.o src/sgemm_cublas.o src/sgemm_naive.o src/sgemm_shared.o src/sgemm_register.o src/sgemm_register_v2.o -o benchmark_gemm -lcublas
 ```
 
 ### 3. 运行测试
@@ -142,6 +145,11 @@ Running: SGEMM_Register
   [Performance] Avg Time: XX.XXX ms
   [Performance] Throughput: XX.XXX TFLOPs
 --------------------------------------------------------
+Running: SGEMM_RegisterTiling_V2
+  [Correctness] Pass! (Max error: 0.000)
+  [Performance] Avg Time: XX.XXX ms
+  [Performance] Throughput: XX.XXX TFLOPs
+--------------------------------------------------------
 ```
 
 ### 4. 清理编译产物
@@ -157,6 +165,7 @@ make clean
 | 算子 | 性能 (TFLOPS) | 利用率 | vs Naive | vs cuBLAS |
 |------|---------------|--------|----------|-----------|
 | **cuBLAS** | 66.7 | 63.6% | 8.9× | 100% |
+| **Register V2** | 35-55 (预估) | 35-55% | 5-7× | 50-80% |
 | **Register** | 30-50 (预估) | 30-50% | 4-6× | 45-75% |
 | **Shared** | 9.1 | 8.7% | 1.2× | 13.7% |
 | **Naive** | 7.5 | 7.1% | 1× | 11.2% |
@@ -168,7 +177,8 @@ make clean
 | **共享内存 Tiling** | 减少全局内存访问 | AI 从 0.5 → 683 |
 | **寄存器分块** | 减少共享内存访问 | 每轮计算 64 FMA |
 | **外积计算** | 提高指令级并行 | 8× 计算强度 |
-| **向量化加载** | 提高带宽利用率 | 协作加载 |
+| **向量化加载 (float4)** | 提高带宽利用率 | 128-bit 协作加载 |
+| **Shared Memory Padding** | 消除 Bank Conflict | 无冲突访存 |
 
 ## 📖 学习路径
 
@@ -198,6 +208,12 @@ make clean
 - 理解双层分块策略
 - 查看 `images/register_*.png` 图解
 - 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
+
+### 阶段 5.5: 进阶优化技巧
+- 阅读 `src/sgemm_register_v2.cu` 了解进一步优化
+- 学习 **float4 向量化加载**：128-bit 协作访存，提高带宽利用率
+- 学习 **Shared Memory Padding**：通过 +4 Padding 消除 Bank Conflict
+- 对比 V1 和 V2 版本，理解微架构优化的重要性
 
 ### 阶段 6: 硬件深入
 - 阅读 `docs/rtx5090_hardware_constraints.md`
