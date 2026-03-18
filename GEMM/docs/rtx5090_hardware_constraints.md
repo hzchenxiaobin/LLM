@@ -97,6 +97,146 @@ RTX 5090: Compute Capability 10.0 (Blackwell)
 | **192** | 24 KB | 10 | 16% | 接近限制 |
 | **255** | ~32 KB | 8 | 12.5% | 最小值 |
 
+### 2.2.1 Occupancy 影响因素详解
+
+Occupancy（占用率）是指每个 SM 上实际运行的 Warp 数量与理论最大 Warp 数量的比值。理解并优化 Occupancy 是编写高效 CUDA Kernel 的关键。
+
+#### 影响 Occupancy 的三大因素
+
+| 因素 | RTX 5090 限制 | 说明 |
+|------|--------------|------|
+| **寄存器数量** | 65,536 个 32-bit 寄存器/SM | 每线程使用越多，并发 Warp 越少 |
+| **共享内存** | 164 KB/SM | 每 Block 使用越多，并发 Block 越少 |
+| **Block/Warp 限制** | 64 Warps/SM, 32 Blocks/SM | 硬件硬性上限 |
+
+#### Occupancy 计算公式
+
+```
+Occupancy = (实际运行的 Warp 数) / (SM 最大 Warp 数) × 100%
+
+其中：
+- SM 最大 Warp 数 = 64 (RTX 5090 每 SM 限制)
+- 实际运行的 Warp 数 = min(寄存器限制, 共享内存限制, 硬件限制)
+```
+
+**基于寄存器的 Warp 数计算**：
+```
+每线程寄存器数 = R
+每 Warp 需要寄存器 = R × 32
+每 SM 最大 Warp 数 = floor(65536 / (R × 32)) = floor(2048 / R)
+
+示例：
+- R = 32:  floor(2048 / 32)  = 64 Warps (100% Occupancy)
+- R = 64:  floor(2048 / 64)  = 32 Warps (50% Occupancy)
+- R = 128: floor(2048 / 128) = 16 Warps (25% Occupancy)
+```
+
+**基于共享内存的 Block 数计算**：
+```
+每 Block 共享内存 = S KB
+每 SM 共享内存 = 164 KB
+每 SM 最大 Block 数 = floor(164 / S)
+
+示例：
+- S = 16 KB: floor(164 / 16) = 10 Blocks
+- S = 32 KB: floor(164 / 32) = 5 Blocks
+- S = 48 KB: floor(164 / 48) = 3 Blocks
+```
+
+#### 综合计算示例
+
+假设一个 Kernel 配置如下：
+```
+- Block 大小: 256 线程 (8 Warps)
+- 每线程寄存器: 96 个
+- 每 Block 共享内存: 32 KB
+```
+
+**计算步骤**：
+
+1. **寄存器限制**：
+   ```
+   每 Warp 需要 = 96 × 32 × 4 bytes = 12,288 bytes = 12 KB
+   最大 Warp 数 = 256 KB / 12 KB = 21.3 → 21 Warps
+   最大 Block 数 = 21 / 8 = 2.6 → 2 Blocks
+   ```
+
+2. **共享内存限制**：
+   ```
+   最大 Block 数 = 164 KB / 32 KB = 5.1 → 5 Blocks
+   对应 Warp 数 = 5 × 8 = 40 Warps
+   ```
+
+3. **硬件限制**：
+   ```
+   每 SM 最大 64 Warps, 32 Blocks
+   256 线程/Block → 每 SM 最多 4 Blocks (256 threads × 4 = 1024 threads, 但未达到 warp 限制)
+   实际上: 64 Warps / 8 Warps per Block = 8 Blocks (但受其他限制)
+   ```
+
+4. **实际 Occupancy**：
+   ```
+   实际并发 Block 数 = min(寄存器限制 2, 共享内存限制 5, 硬件限制 8) = 2 Blocks
+   实际并发 Warp 数 = 2 × 8 = 16 Warps
+   Occupancy = 16 / 64 = 25%
+   ```
+
+#### Occupancy 与性能的关系
+
+**并非越高越好**：
+
+| Occupancy | 适用场景 | 原因 |
+|-----------|---------|------|
+| **100%** | 内存密集型 Kernel | 隐藏延迟需要更多 Warp |
+| **50%** | 平衡型 | 足够隐藏大部分延迟 |
+| **25%** | 计算密集型 (GEMM) | 更多寄存器用于 ILP，减少内存访问 |
+| **<25%** | 通常应避免 | 延迟隐藏不足 |
+
+**GEMM 的特殊性**：
+- GEMM 是计算密集型，主要瓶颈是计算单元利用率
+- 使用更多寄存器（降低 Occupancy）可以提高 Instruction-Level Parallelism (ILP)
+- 目标 Occupancy：25%-50%，而非追求 100%
+
+#### 实际优化建议
+
+1. **寄存器使用策略**：
+   ```
+   - 目标：每线程 64-128 个寄存器
+   - 对应 Occupancy：25%-50%
+   - 平衡 ILP 和延迟隐藏
+   ```
+
+2. **共享内存使用策略**：
+   ```cuda
+   // 推荐配置：每 Block 32-48 KB
+   // 允许 3-5 Blocks 同时运行
+   // 在 RTX 5090 上可获得良好并行度
+   
+   __shared__ float sA[BM * BK];  // 32 KB for BM=128, BK=64
+   __shared__ float sB[BK * BN];  // 16 KB for BK=64, BN=64
+   // 总计: 48 KB
+   ```
+
+3. **Block 大小选择**：
+   ```
+   - 推荐：128-256 线程 (4-8 Warps)
+   - 过小 (64)：无法充分利用 Warp 调度器
+   - 过大 (512+)：可能迅速耗尽寄存器/共享内存
+   ```
+
+#### 编译器优化提示
+
+```cuda
+// 强制限制寄存器使用 (谨慎使用，可能导致 spilling)
+__launch_bounds__(256, 2)  // 256 线程, 最小 2 Blocks/SM
+__global__ void sgemm_kernel(...) {
+    // 编译器会确保寄存器使用不超过限制
+}
+
+// 或者使用 nvcc 编译选项
+// nvcc -maxrregcount=128 kernel.cu
+```
+
 ### 2.3 GEMM 中的寄存器使用分析
 
 #### sgemm_register.cu 的寄存器使用
