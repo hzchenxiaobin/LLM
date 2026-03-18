@@ -48,11 +48,12 @@ GEMM/
 ├── sgemm_register.cu            # 寄存器分块优化实现
 ├── sgemm_cublas.cu              # cuBLAS 参考实现
 │
-├── docs/                        # 文档目录
-│   ├── roofline_analysis.md           # Roofline 模型性能分析
+├── docs/                        # 技术文档目录
+│   ├── roofline_analysis.md            # Roofline 模型性能分析
 │   ├── sgemm_shared_kernel_explained.md # Shared Kernel 详解
 │   ├── sgemm_register_analysis.md       # Register Kernel 性能对比
 │   ├── sgemm_register_code_explanation.md # Register Kernel 逐行解读
+│   ├── rtx5090_hardware_constraints.md  # RTX 5090 硬件约束分析
 │   └── cuda_thread_hierarchy.md         # CUDA 线程层次说明
 │
 ├── images/                      # 图片目录
@@ -60,9 +61,12 @@ GEMM/
 │   ├── shared_gemm_*.png               # Shared Kernel 图解
 │   └── register_*.png                  # Register Kernel 图解
 │
-└── scripts/                     # 辅助脚本
-    ├── generate_roofline.py            # 生成 Roofline 图
-    └── visualize_shared_gemm.py      # 生成 SGEMM 可视化图
+├── scripts/                     # 辅助脚本
+│   ├── generate_roofline.py            # 生成 Roofline 图
+│   └── visualize_shared_gemm.py      # 生成 SGEMM 可视化图
+│
+└── exercises/                   # 练习题目录
+    └── occupancy_calculation_exercises.md  # Occupancy 计算练习题
 ```
 
 ## 🚀 快速开始
@@ -169,28 +173,35 @@ make clean
 
 建议按以下顺序学习：
 
-### 1. 基础概念
+### 阶段 1: 基础概念
 - 阅读 `docs/cuda_thread_hierarchy.md` 了解 CUDA 线程组织
 - 理解 `dim3`, `blockIdx`, `threadIdx` 的含义
+- 理解 SM (Streaming Multiprocessor) 架构
 
-### 2. 朴素实现
+### 阶段 2: 朴素实现
 - 阅读 `sgemm_naive.cu` 了解最基础的矩阵乘法实现
 - 理解为什么性能低（频繁全局内存访问）
 
-### 3. 共享内存优化
+### 阶段 3: 共享内存优化
 - 阅读 `sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
 - 理解 Shared Memory Tiling 原理
 - 查看 `images/shared_gemm_*.png` 图解
 
-### 4. Roofline 分析
+### 阶段 4: 性能分析
 - 阅读 `docs/roofline_analysis.md`
 - 运行 `scripts/generate_roofline.py` 生成图表
 - 理解 Arithmetic Intensity 概念
 
-### 5. 寄存器优化
+### 阶段 5: 寄存器优化
 - 阅读 `sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
 - 理解双层分块策略
 - 查看 `images/register_*.png` 图解
+- 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
+
+### 阶段 6: 硬件深入
+- 阅读 `docs/rtx5090_hardware_constraints.md`
+- 理解寄存器限制、共享内存限制、Bank Conflict
+- 完成 `exercises/occupancy_calculation_exercises.md` 练习题
 
 ## 🔧 高级功能
 
@@ -221,19 +232,47 @@ const int K = 4096;
 make clean && make && ./benchmark_gemm
 ```
 
-## 📝 代码规范
+## 🎯 练习题
 
-### 文件命名
+项目包含一套完整的 Occupancy 计算练习题，帮助你深入理解 GPU 资源限制：
+
+```bash
+# 查看练习题
+less exercises/occupancy_calculation_exercises.md
+```
+
+**练习题内容**：
+- 题目 1-3: 基础寄存器和共享内存计算
+- 题目 4-5: 线程数限制和 GEMM 场景分析
+- 题目 6-7: Warp 调度和动态分区
+- 题目 8: 设计最优 kernel 配置
+
+**学习目标**：
+- 熟练计算 Occupancy
+- 识别性能瓶颈
+- 设计合理的 kernel 配置
+
+## 📝 文档规范
+
+### 目录结构
+- `docs/`：技术文档（性能分析、代码解读、硬件约束）
+- `exercises/`：练习题和计算练习
+- `images/`：可视化图表（Roofline 图、执行流程图）
+- `scripts/`：辅助脚本（图表生成）
+
+### 文件命名规范
 - `sgemm_<优化策略>.cu`：SGEMM 实现文件
-- `run_sgemm_<策略>`：Kernel 包装函数
+- `<主题>_analysis.md`：性能分析文档
+- `<主题>_explanation.md`：代码解读文档
+- `<主题>_exercises.md`：练习题文档
 
 ### 宏定义规范
 ```cpp
-#define BM 128  // Block M 维度大小
-#define BN 128  // Block N 维度大小
-#define BK 8    // Block K 维度步长
-#define TM 8    // Thread M 维度负责大小
-#define TN 8    // Thread N 维度负责大小
+#define BM 128  // Block M 维度大小 (Block M)
+#define BN 128  // Block N 维度大小 (Block N)
+#define BK 8    // Block K 维度步长 (Block K)
+#define TM 8    // Thread M 维度负责大小 (Thread M)
+#define TN 8    // Thread N 维度负责大小 (Thread N)
 ```
 
 ## 🐛 常见问题
@@ -260,8 +299,30 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
 - [CUDA C Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
 - [CUDA Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)
-- [CUTLAS](https://github.com/NVIDIA/cutlass) - NVIDIA 官方高效 GEMM 实现
+- [CUTLASS](https://github.com/NVIDIA/cutlass) - NVIDIA 官方高效 GEMM 实现
 - [Roofline Model Paper](https://people.eecs.berkeley.edu/~kubitron/cs252/handouts/papers/roofline.pdf)
+- [NVIDIA A100/RTX 架构白皮书](https://www.nvidia.com/en-us/data-center/a100/)
+
+## 📊 文档索引
+
+### 分析文档
+| 文档 | 内容 |
+|------|------|
+| `docs/roofline_analysis.md` | Roofline 模型与 Arithmetic Intensity 分析 |
+| `docs/sgemm_register_analysis.md` | Register vs Shared Kernel 性能对比 |
+| `docs/rtx5090_hardware_constraints.md` | RTX 5090 硬件约束详解 |
+
+### 代码解读
+| 文档 | 内容 |
+|------|------|
+| `docs/sgemm_shared_kernel_explained.md` | Shared Memory Kernel 详解 |
+| `docs/sgemm_register_code_explanation.md` | Register Kernel 逐行解读 |
+| `docs/cuda_thread_hierarchy.md` | CUDA 线程层次与 SM 架构 |
+
+### 练习题
+| 文档 | 内容 |
+|------|------|
+| `exercises/occupancy_calculation_exercises.md` | 8 道 Occupancy 计算练习题 |
 
 ## 🤝 贡献
 
@@ -272,6 +333,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 - 支持更多数据类型（FP16、BF16）
 - 添加性能 profiling 工具支持
 - 多 GPU 支持
+- 更多练习题（Bank Conflict、Warp Divergence）
 
 ## 📄 许可证
 
