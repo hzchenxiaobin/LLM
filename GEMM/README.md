@@ -22,10 +22,10 @@ C = alpha × A × B + beta × C
 
 | 算子 | 文件 | 优化技术 | 预期性能 |
 |------|------|---------|---------|
-| **cuBLAS** | `sgemm_cublas.cu` | NVIDIA 官方高度优化库 | 60+ TFLOPS |
-| **Naive** | `sgemm_naive.cu` | 无优化，直接实现 | ~7 TFLOPS |
-| **Shared Memory** | `sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
-| **Register** | `sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
+| **cuBLAS** | `src/sgemm_cublas.cu` | NVIDIA 官方高度优化库 | 60+ TFLOPS |
+| **Naive** | `src/sgemm_naive.cu` | 无优化，直接实现 | ~7 TFLOPS |
+| **Shared Memory** | `src/sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
+| **Register** | `src/sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
 
 ### 硬件要求
 
@@ -39,14 +39,15 @@ C = alpha × A × B + beta × C
 GEMM/
 ├── README.md                    # 本文件
 ├── Makefile                     # 编译脚本
-├── main.cu                      # 测试框架主程序
-├── common.h                     # 公共头文件（CUDA 错误检查宏）
-├── gemm_kernels.h               # Kernel 函数声明
 │
-├── sgemm_naive.cu               # 朴素实现
-├── sgemm_shared.cu              # 共享内存优化实现
-├── sgemm_register.cu            # 寄存器分块优化实现
-├── sgemm_cublas.cu              # cuBLAS 参考实现
+├── src/                         # 源代码目录
+│   ├── main.cu                  # 测试框架主程序
+│   ├── common.h                 # 公共头文件（CUDA 错误检查宏）
+│   ├── gemm_kernels.h           # Kernel 函数声明
+│   ├── sgemm_naive.cu           # 朴素实现
+│   ├── sgemm_shared.cu          # 共享内存优化实现
+│   ├── sgemm_register.cu        # 寄存器分块优化实现
+│   └── sgemm_cublas.cu          # cuBLAS 参考实现
 │
 ├── docs/                        # 技术文档目录
 │   ├── roofline_analysis.md            # Roofline 模型性能分析
@@ -102,12 +103,12 @@ make
 
 编译输出：
 ```
-nvcc -O3 -c main.cu
-nvcc -O3 -c sgemm_cublas.cu
-nvvcc -O3 -c sgemm_naive.cu
-nvcc -O3 -c sgemm_shared.cu
-nvcc -O3 -c sgemm_register.cu
-nvcc -O3 main.o sgemm_cublas.o sgemm_naive.o sgemm_shared.o sgemm_register.o -o benchmark_gemm -lcublas
+nvcc -O3 -c src/main.cu -o src/main.o
+nvcc -O3 -c src/sgemm_cublas.cu -o src/sgemm_cublas.o
+nvcc -O3 -c src/sgemm_naive.cu -o src/sgemm_naive.o
+nvcc -O3 -c src/sgemm_shared.cu -o src/sgemm_shared.o
+nvcc -O3 -c src/sgemm_register.cu -o src/sgemm_register.o
+nvcc -O3 src/main.o src/sgemm_cublas.o src/sgemm_naive.o src/sgemm_shared.o src/sgemm_register.o -o benchmark_gemm -lcublas
 ```
 
 ### 3. 运行测试
@@ -179,11 +180,11 @@ make clean
 - 理解 SM (Streaming Multiprocessor) 架构
 
 ### 阶段 2: 朴素实现
-- 阅读 `sgemm_naive.cu` 了解最基础的矩阵乘法实现
+- 阅读 `src/sgemm_naive.cu` 了解最基础的矩阵乘法实现
 - 理解为什么性能低（频繁全局内存访问）
 
 ### 阶段 3: 共享内存优化
-- 阅读 `sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
+- 阅读 `src/sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
 - 理解 Shared Memory Tiling 原理
 - 查看 `images/shared_gemm_*.png` 图解
 
@@ -193,7 +194,7 @@ make clean
 - 理解 Arithmetic Intensity 概念
 
 ### 阶段 5: 寄存器优化
-- 阅读 `sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
+- 阅读 `src/sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
 - 理解双层分块策略
 - 查看 `images/register_*.png` 图解
 - 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
@@ -219,7 +220,7 @@ python3 scripts/visualize_shared_gemm.py
 
 ### 自定义矩阵大小
 
-编辑 `main.cu` 中的矩阵大小参数：
+编辑 `src/main.cu` 中的矩阵大小参数：
 
 ```cpp
 const int M = 4096;  // 修改为你需要的大小
@@ -255,6 +256,7 @@ less exercises/occupancy_calculation_exercises.md
 ## 📝 文档规范
 
 ### 目录结构
+- `src/`：源代码文件（.cu, .h）
 - `docs/`：技术文档（性能分析、代码解读、硬件约束）
 - `exercises/`：练习题和计算练习
 - `images/`：可视化图表（Roofline 图、执行流程图）

@@ -11,13 +11,14 @@ LLM/
 └── GEMM/                  # CUDA SGEMM 优化教程
     ├── README.md          # 详细教程文档
     ├── Makefile
-    ├── main.cu            # 基准测试框架
-    ├── common.h           # 公共头文件
-    ├── gemm_kernels.h     # Kernel 声明
-    ├── sgemm_naive.cu     # 朴素实现
-    ├── sgemm_shared.cu    # 共享内存优化
-    ├── sgemm_register.cu  # 寄存器分块优化
-    ├── sgemm_cublas.cu    # cuBLAS 参考实现
+    ├── src/               # 源代码目录
+    │   ├── main.cu        # 基准测试框架
+    │   ├── common.h       # 公共头文件
+    │   ├── gemm_kernels.h # Kernel 声明
+    │   ├── sgemm_naive.cu     # 朴素实现
+    │   ├── sgemm_shared.cu    # 共享内存优化
+    │   ├── sgemm_register.cu  # 寄存器分块优化
+    │   └── sgemm_cublas.cu    # cuBLAS 参考实现
     ├── docs/              # 详细文档
     │   ├── cuda_thread_hierarchy.md      # CUDA 线程层次详解
     │   ├── roofline_analysis.md          # Roofline 性能模型

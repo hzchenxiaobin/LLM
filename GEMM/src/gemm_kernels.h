@@ -18,5 +18,8 @@ void run_sgemm_shared(int M, int N, int K, float alpha, const float *A, const fl
 // 3. 寄存器分块 GEMM
 void run_sgemm_register(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 
+// 3.5 优化版寄存器分块 GEMM (Vectorized + Padding)
+void run_sgemm_register_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
 // 4. cuBLAS GEMM (基准)
 void run_cublas(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
