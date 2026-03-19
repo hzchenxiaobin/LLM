@@ -192,6 +192,9 @@ int main() {
     // 3.6 Register Tiling V3 版本 (Double Buffering)
     benchmark_gemm("SGEMM_RegisterTiling_V3", run_sgemm_register_v3, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
+    // 3.7 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
+    benchmark_gemm("SGEMM_RegisterTiling_BankConflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;
 

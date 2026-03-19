@@ -139,7 +139,17 @@ float4 val = reinterpret_cast<const float4*>(&A[idx])[0];
 
 消除 Shared Memory Bank 冲突：
 共享内存分为 32 个 Bank。如果多个线程同时访问同一个 Bank 的不同地址，就会发生序列化（Bank Conflict），导致性能下降。
-解决方案：在申请共享内存时，增加 padding（例如 __shared__ float sA[128][128 + 1];）或者使用地址 Swizzling 技术。
+解决方案：在申请共享内存时，增加 padding（例如 `__shared__ float sA[128][8 + 1];`）或者使用地址 Swizzling 技术。
+
+Bank Conflict 优化实现（sgemm_register_bank_conflict.cu）：
+```cpp
+#define BK_PAD (BK + 1)   // 8 + 1 = 9
+#define BN_PAD (BN + 1)   // 128 + 1 = 129
+
+__shared__ float sA[BM][BK_PAD];  // 128 x 9，避免 bank conflict
+__shared__ float sB[BK][BN_PAD];  // 8 x 129，保持一致性
+```
+通过在数组的第二维添加 1 个元素的 padding，改变了 shared memory 的 bank 映射，使得相邻线程访问不同 bank，完全消除 bank conflict。详细原理见 [bank_conflict_analysis.md](bank_conflict_analysis.md)。
 
 双缓冲 / 软件流水线 (Double Buffering / Prefetching)：
 分配两组 Shared Memory (sA[2][...], sB[2][...]) 和两组寄存器。当 GPU 在计算第 $i$ 块数据时，后台利用异步拷贝（Asynchronous Copy, cp.async）提前把第 $i+1$ 块的数据从全局内存拉到 Shared Memory 中，实现计算和访存的完美重叠。
@@ -192,3 +202,53 @@ __global__ void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
 使用 Nsight Compute (ncu)：这是最重要的 profiling 工具。运行你的算子，查看 Compute Throughput 和 Memory Throughput，看看瓶颈是在计算还是访存。
 
 学习 CUTLASS：当掌握了手写 Register Tiling 和 WMMA 后，建议直接阅读并使用 NVIDIA 开源的 CUTLASS 模板库，现代工业级的高性能算子（包括 LLM 推理的 FlashAttention 等）基本都是建立在 CUTLASS 的理念之上的。
+
+---
+
+## 项目文件说明
+
+### 实现文件 (src/)
+
+| 文件 | 说明 |
+|-----|------|
+| `sgemm_naive.cu` | 朴素 GEMM 实现，每个线程计算一个元素 |
+| `sgemm_shared.cu` | Shared Memory Tiling 优化 |
+| `sgemm_register.cu` | 寄存器分块优化（基础版）|
+| `sgemm_register_v2.cu` | 向量化访存 + Padding 优化 |
+| `sgemm_register_v3.cu` | 双缓冲 (Double Buffering) 优化 |
+| `sgemm_register_bank_conflict.cu` | **Bank Conflict 消除优化（Padding 方法）** |
+| `sgemm_cublas.cu` | cuBLAS 参考实现 |
+| `main.cu` | 测试框架主程序 |
+| `gemm_kernels.h` | 算子头文件声明 |
+
+### 文档 (docs/)
+
+| 文档 | 内容 |
+|-----|------|
+| [bank_conflict_analysis.md](bank_conflict_analysis.md) | **Bank Conflict 深度解析（RTX 5090 视角）** |
+| [sgemm_register_analysis.md](sgemm_register_analysis.md) | 寄存器分块优化分析 |
+| [sgemm_register_code_explanation.md](sgemm_register_code_explanation.md) | 寄存器分块代码详解 |
+| [sgemm_register_v2_optimization.md](sgemm_register_v2_optimization.md) | V2 向量化优化详解 |
+| [cuda_thread_hierarchy.md](cuda_thread_hierarchy.md) | CUDA 线程层级详解 |
+| [roofline_analysis.md](roofline_analysis.md) | Roofline 模型分析 |
+| [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束分析 |
+| [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Kernel 详解 |
+
+### 编译与测试
+
+```bash
+# 编译所有算子
+make clean && make
+
+# 运行性能测试
+./benchmark_gemm
+
+# 预期输出（在 RTX 5090 上）
+========================================================
+检测到显卡设备: NVIDIA GeForce RTX 5090 (Compute 10.0)
+理论 FP32 峰值算力: 90.00 TFLOPs
+========================================================
+矩阵尺寸: M=4096, N=4096, K=4096
+...
+SGEMM_RegisterTiling_BankConflict 性能统计 ...
+```
