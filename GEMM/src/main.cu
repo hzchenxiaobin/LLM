@@ -134,7 +134,7 @@ int main() {
     std::cout << "========================================================\n";
     std::cout << "检测到显卡设备: " << prop.name << " (Compute " << prop.major << "." << prop.minor << ")" << std::endl;
     std::cout << "SM 数量: " << prop.multiProcessorCount << ", 核心频率: " << prop.clockRate / 1000.0 << " MHz" << std::endl;
-    std::cout << "理论 FP32 峰值算力: " << std::fixed << std::setprecision(2) << peak_tflops << " TFLOPs" << std::endl;
+    std::cout << "理论 FP32 CUDA Core 峰值算力: " << std::fixed << std::setprecision(2) << peak_tflops << " TFLOPs" << std::endl;
     std::cout << "========================================================\n";
 
     // 矩阵维度 (M, N, K)
@@ -195,12 +195,16 @@ int main() {
     // 3.7 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
     benchmark_gemm("SGEMM_RegisterTiling_BankConflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 5. Tensor Core WMMA 版本 (作为 WMMA_v2 的参考)
-    benchmark_gemm("SGEMM_TensorCore_WMMA", run_sgemm_wmma, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
-    // 将 WMMA 的输出作为 WMMA_v2 的参考
+    // 4. cuBLAS TensorCore 版本 (作为 WMMA 实现的基准参考)
+    // 使用 FP16 输入 + FP32 累加，与 WMMA 实现行为一致
+    benchmark_gemm("cuBLAS TensorCore (WMMA Reference)", run_cublas_tensorcore, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, false, peak_tflops);
+    // 将 cuBLAS TensorCore 的输出作为 WMMA 实现的参考基准
     CHECK_CUDA(cudaMemcpy(h_C_ref.data(), d_C, size_C, cudaMemcpyDeviceToHost));
 
-    // 5.1 Tensor Core WMMA v2 版本 (与 WMMA 对比正确性)
+    // 5. Tensor Core WMMA 版本 (与 cuBLAS TensorCore 对比正确性)
+    benchmark_gemm("SGEMM_TensorCore_WMMA", run_sgemm_wmma, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
+    // 5.1 Tensor Core WMMA v2 版本 (与 cuBLAS TensorCore 对比正确性)
     benchmark_gemm("SGEMM_TensorCore_WMMA_v2", run_sgemm_wmma_v2, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
     std::cout << "--------------------------------------------------------\n";
