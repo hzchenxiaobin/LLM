@@ -1,7 +1,7 @@
 # 编译器设置
 NVCC = nvcc
-# 编译参数：开启最高级别优化
-NVCC_FLAGS = -O3 -std=c++14 
+# 编译参数：开启最高级别优化，启用 WMMA Tensor Core (需要 sm_70+)
+NVCC_FLAGS = -O3 -std=c++14 -arch=sm_70
 # 链接器参数：链接 cuBLAS 库
 LIBS = -lcublas
 
@@ -12,7 +12,7 @@ SRC_DIR = src
 TARGET = benchmark_gemm
 
 # 需要编译的源文件对应的目标对象文件
-OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/sgemm_cublas.o $(SRC_DIR)/sgemm_naive.o $(SRC_DIR)/sgemm_shared.o $(SRC_DIR)/sgemm_register.o $(SRC_DIR)/sgemm_register_v2.o $(SRC_DIR)/sgemm_register_v3.o $(SRC_DIR)/sgemm_register_bank_conflict.o
+OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/sgemm_cublas.o $(SRC_DIR)/sgemm_naive.o $(SRC_DIR)/sgemm_shared.o $(SRC_DIR)/sgemm_register.o $(SRC_DIR)/sgemm_register_v2.o $(SRC_DIR)/sgemm_register_v3.o $(SRC_DIR)/sgemm_register_bank_conflict.o $(SRC_DIR)/sgemm_wmma.o $(SRC_DIR)/sgemm_wmma_v2.o
 
 # 默认构建目标
 all: $(TARGET)
@@ -52,6 +52,14 @@ $(SRC_DIR)/sgemm_register_v3.o: $(SRC_DIR)/sgemm_register_v3.cu $(SRC_DIR)/commo
 # 编译Bank Conflict优化版寄存器分块 GEMM 文件
 $(SRC_DIR)/sgemm_register_bank_conflict.o: $(SRC_DIR)/sgemm_register_bank_conflict.cu $(SRC_DIR)/common.h $(SRC_DIR)/gemm_kernels.h
 	$(NVCC) $(NVCC_FLAGS) -c $(SRC_DIR)/sgemm_register_bank_conflict.cu -o $(SRC_DIR)/sgemm_register_bank_conflict.o
+
+# 编译 Tensor Core WMMA GEMM 文件
+$(SRC_DIR)/sgemm_wmma.o: $(SRC_DIR)/sgemm_wmma.cu $(SRC_DIR)/common.h $(SRC_DIR)/gemm_kernels.h
+	$(NVCC) $(NVCC_FLAGS) -c $(SRC_DIR)/sgemm_wmma.cu -o $(SRC_DIR)/sgemm_wmma.o
+
+# 编译 Tensor Core WMMA v2 GEMM 文件
+$(SRC_DIR)/sgemm_wmma_v2.o: $(SRC_DIR)/sgemm_wmma_v2.cu $(SRC_DIR)/common.h $(SRC_DIR)/gemm_kernels.h
+	$(NVCC) $(NVCC_FLAGS) -c $(SRC_DIR)/sgemm_wmma_v2.cu -o $(SRC_DIR)/sgemm_wmma_v2.o
 
 # 清理编译产物
 clean:

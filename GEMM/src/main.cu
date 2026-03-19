@@ -195,6 +195,12 @@ int main() {
     // 3.7 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
     benchmark_gemm("SGEMM_RegisterTiling_BankConflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
+    // 5. Tensor Core WMMA 版本
+    benchmark_gemm("SGEMM_TensorCore_WMMA", run_sgemm_wmma, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
+    // 5.1 Tensor Core WMMA v2 版本 (简化版 Block 协同加载)
+    benchmark_gemm("SGEMM_TensorCore_WMMA_v2", run_sgemm_wmma_v2, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;
 
