@@ -189,6 +189,9 @@ int main() {
     // 3.5 Register Tiling V2 版本 (Vectorized + Padding)
     benchmark_gemm("SGEMM_RegisterTiling_V2", run_sgemm_register_v2, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
+    // 3.6 Register Tiling V3 版本 (Double Buffering)
+    benchmark_gemm("SGEMM_RegisterTiling_V3", run_sgemm_register_v3, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;
 
