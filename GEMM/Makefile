@@ -14,8 +14,8 @@ TARGET = benchmark_gemm
 # 需要编译的源文件对应的目标对象文件
 OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/sgemm_cublas.o $(SRC_DIR)/sgemm_naive.o $(SRC_DIR)/sgemm_shared.o $(SRC_DIR)/sgemm_register.o $(SRC_DIR)/sgemm_register_v2.o $(SRC_DIR)/sgemm_register_v3.o $(SRC_DIR)/sgemm_register_bank_conflict.o $(SRC_DIR)/sgemm_wmma.o $(SRC_DIR)/sgemm_wmma_v2.o
 
-# 默认构建目标
-all: $(TARGET)
+# 默认构建目标: 先清理，再编译
+all: clean $(TARGET)
 
 # 链接生成可执行文件
 $(TARGET): $(OBJS)
