@@ -15,7 +15,7 @@
 // 辅助宏：使用 float4 进行 128-bit 向量化访存
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<const float4*>(&(pointer))[0])
 
-__global__ void sgemm_register_kernel_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
+__global__ void sgemm_register_kernel_vec_bank(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
     int bx = blockIdx.x;
     int by = blockIdx.y;
     int tx = threadIdx.x;
@@ -120,8 +120,8 @@ __global__ void sgemm_register_kernel_v2(int M, int N, int K, float alpha, const
 }
 
 // 包装函数
-void run_sgemm_register_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
+void run_sgemm_register_vec_bank(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
     dim3 block(16, 16);
     dim3 grid((N + BN - 1) / BN, (M + BM - 1) / BM);
-    sgemm_register_kernel_v2<<<grid, block>>>(M, N, K, alpha, A, B, beta, C);
+    sgemm_register_kernel_vec_bank<<<grid, block>>>(M, N, K, alpha, A, B, beta, C);
 }

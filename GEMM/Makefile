@@ -18,8 +18,8 @@ TARGET = $(BUILD_DIR)/benchmark_gemm
 
 # GEMM 算子对象文件
 GEMM_OBJS = $(BUILD_GEMM_DIR)/sgemm_cublas.o $(BUILD_GEMM_DIR)/sgemm_naive.o $(BUILD_GEMM_DIR)/sgemm_shared.o \
-            $(BUILD_GEMM_DIR)/sgemm_register.o $(BUILD_GEMM_DIR)/sgemm_register_v2.o $(BUILD_GEMM_DIR)/sgemm_register_v3.o \
-            $(BUILD_GEMM_DIR)/sgemm_register_bank_conflict.o $(BUILD_GEMM_DIR)/sgemm_register_vectorized.o
+            $(BUILD_GEMM_DIR)/sgemm_register.o $(BUILD_GEMM_DIR)/sgemm_register_vec_bank.o \
+            $(BUILD_GEMM_DIR)/sgemm_register_bank_conflict.o $(BUILD_GEMM_DIR)/sgemm_register_vectorized.o \
 
 # 主程序对象文件
 MAIN_OBJ = $(BUILD_DIR)/main.o
@@ -68,12 +68,8 @@ $(BUILD_GEMM_DIR)/sgemm_register.o: $(GEMM_DIR)/sgemm_register.cu $(SRC_DIR)/com
 	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_register.cu -o $(BUILD_GEMM_DIR)/sgemm_register.o
 
 # 编译优化版寄存器分块 GEMM 文件
-$(BUILD_GEMM_DIR)/sgemm_register_v2.o: $(GEMM_DIR)/sgemm_register_v2.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h | $(BUILD_GEMM_DIR)
-	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_register_v2.cu -o $(BUILD_GEMM_DIR)/sgemm_register_v2.o
-
-# 编译双缓冲优化版寄存器分块 GEMM 文件
-$(BUILD_GEMM_DIR)/sgemm_register_v3.o: $(GEMM_DIR)/sgemm_register_v3.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h | $(BUILD_GEMM_DIR)
-	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_register_v3.cu -o $(BUILD_GEMM_DIR)/sgemm_register_v3.o
+$(BUILD_GEMM_DIR)/sgemm_register_vec_bank.o: $(GEMM_DIR)/sgemm_register_vec_bank.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h | $(BUILD_GEMM_DIR)
+	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_register_vec_bank.cu -o $(BUILD_GEMM_DIR)/sgemm_register_vec_bank.o
 
 # 编译Bank Conflict优化版寄存器分块 GEMM 文件
 $(BUILD_GEMM_DIR)/sgemm_register_bank_conflict.o: $(GEMM_DIR)/sgemm_register_bank_conflict.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h | $(BUILD_GEMM_DIR)

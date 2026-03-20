@@ -186,17 +186,14 @@ int main() {
     // 3. Register Tiling 版本
     benchmark_gemm("SGEMM_RegisterTiling", run_sgemm_register, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.5 Register Tiling V2 版本 (Vectorized + Padding)
-    benchmark_gemm("SGEMM_RegisterTiling_V2", run_sgemm_register_v2, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // 3.7 Register Tiling 向量化访存优化版本 (Vectorized Loads/Stores)
+    benchmark_gemm("SGEMM_RegisterTiling_Vectorized", run_sgemm_register_vectorized, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.6 Register Tiling V3 版本 (Double Buffering)
-    benchmark_gemm("SGEMM_RegisterTiling_V3", run_sgemm_register_v3, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
-
-    // 3.7 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
+    // 3.8 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
     benchmark_gemm("SGEMM_RegisterTiling_BankConflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.8 Register Tiling 向量化访存优化版本 (Vectorized Loads/Stores)
-    benchmark_gemm("SGEMM_RegisterTiling_Vectorized", run_sgemm_register_vectorized, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // 3.9 Register Tiling VecBank 版本 (Vectorized + Padding)
+    benchmark_gemm("SGEMM_RegisterTiling_VecBank", run_sgemm_register_vec_bank, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;

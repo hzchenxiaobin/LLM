@@ -19,10 +19,7 @@ void run_sgemm_shared(int M, int N, int K, float alpha, const float *A, const fl
 void run_sgemm_register(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 
 // 3.5 优化版寄存器分块 GEMM (Vectorized + Padding)
-void run_sgemm_register_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
-
-// 3.6 双缓冲优化版寄存器分块 GEMM (Double Buffering)
-void run_sgemm_register_v3(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+void run_sgemm_register_vec_bank(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 
 // 3.7 Bank Conflict优化版寄存器分块 GEMM (Shared Memory Padding)
 void run_sgemm_register_bank_conflict(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
