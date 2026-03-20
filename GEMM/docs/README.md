@@ -10,21 +10,23 @@ CUDA GEMM 算子性能优化教程 (面向 RTX 5090)
 
 CUDA Kernel 代码：
 
-__global__ void sgemm_naive(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
+**global** void sgemm_naive(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
     // 计算当前线程负责的矩阵 C 的行号和列号
     int x = blockIdx.x * blockDim.x + threadIdx.x; // 列 (N)
     int y = blockIdx.y * blockDim.y + threadIdx.y; // 行 (M)
 
-    if (x < N && y < M) {
-        float tmp = 0.0f;
-        for (int i = 0; i < K; ++i) {
-            // A 的读取是连续的（合并访存），但 B 的读取是跳跃的（非合并访存）
-            tmp += A[y * K + i] * B[i * N + x];
-        }
-        C[y * N + x] = alpha * tmp + beta * C[y * N + x];
+```
+if (x < N && y < M) {
+    float tmp = 0.0f;
+    for (int i = 0; i < K; ++i) {
+        // A 的读取是连续的（合并访存），但 B 的读取是跳跃的（非合并访存）
+        tmp += A[y * K + i] * B[i * N + x];
     }
+    C[y * N + x] = alpha * tmp + beta * C[y * N + x];
 }
+```
 
+}
 
 性能瓶颈分析：
 
@@ -39,52 +41,54 @@ __global__ void sgemm_naive(int M, int N, int K, float alpha, const float *A, co
 
 CUDA Kernel 代码：
 
-template <int BLOCK_SIZE>
-__global__ void sgemm_shared_mem(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
+template 
+**global** void sgemm_shared_mem(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
     // 申请共享内存
-    __shared__ float sA[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ float sB[BLOCK_SIZE][BLOCK_SIZE];
+    **shared** float sA[BLOCK_SIZE][BLOCK_SIZE];
+    **shared** float sB[BLOCK_SIZE][BLOCK_SIZE];
 
-    int bx = blockIdx.x, by = blockIdx.y;
-    int tx = threadIdx.x, ty = threadIdx.y;
+```
+int bx = blockIdx.x, by = blockIdx.y;
+int tx = threadIdx.x, ty = threadIdx.y;
 
-    // 当前线程负责的全局 C 的坐标
-    int row = by * BLOCK_SIZE + ty;
-    int col = bx * BLOCK_SIZE + tx;
+// 当前线程负责的全局 C 的坐标
+int row = by * BLOCK_SIZE + ty;
+int col = bx * BLOCK_SIZE + tx;
 
-    float tmp = 0.0f;
+float tmp = 0.0f;
 
-    // 沿着 K 维度分块滑动
-    for (int i = 0; i < (K + BLOCK_SIZE - 1) / BLOCK_SIZE; ++i) {
-        // 协同加载数据到共享内存
-        if (row < M && i * BLOCK_SIZE + tx < K)
-            sA[ty][tx] = A[row * K + i * BLOCK_SIZE + tx];
-        else
-            sA[ty][tx] = 0.0f;
+// 沿着 K 维度分块滑动
+for (int i = 0; i < (K + BLOCK_SIZE - 1) / BLOCK_SIZE; ++i) {
+    // 协同加载数据到共享内存
+    if (row < M && i * BLOCK_SIZE + tx < K)
+        sA[ty][tx] = A[row * K + i * BLOCK_SIZE + tx];
+    else
+        sA[ty][tx] = 0.0f;
 
-        if (i * BLOCK_SIZE + ty < K && col < N)
-            sB[ty][tx] = B[(i * BLOCK_SIZE + ty) * N + col];
-        else
-            sB[ty][tx] = 0.0f;
+    if (i * BLOCK_SIZE + ty < K && col < N)
+        sB[ty][tx] = B[(i * BLOCK_SIZE + ty) * N + col];
+    else
+        sB[ty][tx] = 0.0f;
 
-        // 必须同步，确保整个 Block 都加载完毕
-        __syncthreads();
+    // 必须同步，确保整个 Block 都加载完毕
+    __syncthreads();
 
-        // 在共享内存中进行矩阵相乘
-        #pragma unroll
-        for (int k = 0; k < BLOCK_SIZE; ++k) {
-            tmp += sA[ty][k] * sB[k][tx];
-        }
-
-        // 再次同步，确保当前块计算完毕，才可以进行下一次迭代覆盖 sA 和 sB
-        __syncthreads();
+    // 在共享内存中进行矩阵相乘
+    #pragma unroll
+    for (int k = 0; k < BLOCK_SIZE; ++k) {
+        tmp += sA[ty][k] * sB[k][tx];
     }
 
-    if (row < M && col < N) {
-        C[row * N + col] = alpha * tmp + beta * C[row * N + col];
-    }
+    // 再次同步，确保当前块计算完毕，才可以进行下一次迭代覆盖 sA 和 sB
+    __syncthreads();
 }
 
+if (row < M && col < N) {
+    C[row * N + col] = alpha * tmp + beta * C[row * N + col];
+}
+```
+
+}
 
 优化效果：
 如果 BLOCK_SIZE=32，我们从全局内存读取数据的次数减少了约 32 倍！在早期的 GPU 上，这能达到 60% 左右的峰值性能，但在 RTX 5090 上这还远远不够。
@@ -108,24 +112,26 @@ float accum[TM][TN] = {0.0f}; // 线程私有的寄存器累加器
 for (int k_idx = 0; k_idx < K; k_idx += BLOCK_SIZE_K) {
     // 1. 将 A, B 的块加载到 Shared Memory (代码略)
     __syncthreads();
+
+```
+// 2. 寄存器分块计算
+for (int k = 0; k < BLOCK_SIZE_K; ++k) {
+    // 从共享内存加载到寄存器
+    for (int i=0; i<TM; ++i) frag_a[i] = sA[thread_y * TM + i][k];
+    for (int j=0; j<TN; ++j) frag_b[j] = sB[k][thread_x * TN + j];
     
-    // 2. 寄存器分块计算
-    for (int k = 0; k < BLOCK_SIZE_K; ++k) {
-        // 从共享内存加载到寄存器
-        for (int i=0; i<TM; ++i) frag_a[i] = sA[thread_y * TM + i][k];
-        for (int j=0; j<TN; ++j) frag_b[j] = sB[k][thread_x * TN + j];
-        
-        // 寄存器级别的 FFMA (Fused Multiply-Add)
-        for (int i=0; i<TM; ++i) {
-            for (int j=0; j<TN; ++j) {
-                accum[i][j] += frag_a[i] * frag_b[j];
-            }
+    // 寄存器级别的 FFMA (Fused Multiply-Add)
+    for (int i=0; i<TM; ++i) {
+        for (int j=0; j<TN; ++j) {
+            accum[i][j] += frag_a[i] * frag_b[j];
         }
     }
-    __syncthreads();
+}
+__syncthreads();
+```
+
 }
 // 3. 将寄存器 accum 中的结果写回 Global Memory
-
 
 关键点： 寄存器是 GPU 上最快的存储，通过扩大每个线程的工作量（Instruction-Level Parallelism），隐藏访存延迟。
 
@@ -142,6 +148,7 @@ float4 val = reinterpret_cast<const float4*>(&A[idx])[0];
 解决方案：在申请共享内存时，增加 padding（例如 `__shared__ float sA[128][8 + 1];`）或者使用地址 Swizzling 技术。
 
 Bank Conflict 优化实现（sgemm_register_bank_conflict.cu）：
+
 ```cpp
 #define BK_PAD (BK + 1)   // 8 + 1 = 9
 #define BN_PAD (BN + 1)   // 128 + 1 = 129
@@ -149,6 +156,7 @@ Bank Conflict 优化实现（sgemm_register_bank_conflict.cu）：
 __shared__ float sA[BM][BK_PAD];  // 128 x 9，避免 bank conflict
 __shared__ float sB[BK][BN_PAD];  // 8 x 129，保持一致性
 ```
+
 通过在数组的第二维添加 1 个元素的 padding，改变了 shared memory 的 bank 映射，使得相邻线程访问不同 bank，完全消除 bank conflict。详细原理见 [bank_conflict_analysis.md](bank_conflict_analysis.md)。
 
 双缓冲 / 软件流水线 (Double Buffering / Prefetching)：
@@ -165,33 +173,35 @@ WMMA 基础用法演示（FP16 精度）：
 #include <mma.h>
 using namespace nvcuda;
 
-__global__ void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
+**global** void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
     // 定义 WMMA 矩阵片段 (Fragment)
     // 假设采用 16x16x16 的 Tensor Core 形状
     wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> a_frag;
     wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> b_frag;
     wmma::fragment<wmma::accumulator, 16, 16, 16, float> c_frag;
 
-    // 初始化累加器为 0
-    wmma::fill_fragment(c_frag, 0.0f);
+```
+// 初始化累加器为 0
+wmma::fill_fragment(c_frag, 0.0f);
 
-    int warpM = (blockIdx.x * blockDim.x + threadIdx.x) / 32; // 当前 Warp 对应的行
-    int warpN = (blockIdx.y * blockDim.y + threadIdx.y);      // 当前 Warp 对应的列
+int warpM = (blockIdx.x * blockDim.x + threadIdx.x) / 32; // 当前 Warp 对应的行
+int warpN = (blockIdx.y * blockDim.y + threadIdx.y);      // 当前 Warp 对应的列
 
-    // K 维度循环
-    for (int i = 0; i < K; i += 16) {
-        // Warp 协同从内存加载矩阵块到 Fragment
-        wmma::load_matrix_sync(a_frag, A + warpM * 16 * K + i, K);
-        wmma::load_matrix_sync(b_frag, B + i * N + warpN * 16, N);
+// K 维度循环
+for (int i = 0; i < K; i += 16) {
+    // Warp 协同从内存加载矩阵块到 Fragment
+    wmma::load_matrix_sync(a_frag, A + warpM * 16 * K + i, K);
+    wmma::load_matrix_sync(b_frag, B + i * N + warpN * 16, N);
 
-        // 激动人心的一步：调用 Tensor Core 进行 16x16x16 的矩阵乘加运算！
-        wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
-    }
-
-    // 将结果存回全局内存
-    wmma::store_matrix_sync(C + warpM * 16 * N + warpN * 16, c_frag, N, wmma::mem_row_major);
+    // 激动人心的一步：调用 Tensor Core 进行 16x16x16 的矩阵乘加运算！
+    wmma::mma_sync(c_frag, a_frag, b_frag, c_frag);
 }
 
+// 将结果存回全局内存
+wmma::store_matrix_sync(C + warpM * 16 * N + warpN * 16, c_frag, N, wmma::mem_row_major);
+```
+
+}
 
 进阶提示对于 5090： WMMA API 虽然好用，但为了达到 CUTLASS 或 cuBLAS 的水平，现代架构 (Hopper/Blackwell) 倾向于使用更底层的 PTX 指令 mma.sync，或者直接利用 TMA (Tensor Memory Accelerator) 技术来实现异步无缝的数据搬运。
 
@@ -209,34 +219,38 @@ __global__ void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
 
 ### 实现文件 (src/)
 
-| 文件 | 说明 |
-|-----|------|
-| `sgemm_naive.cu` | 朴素 GEMM 实现，每个线程计算一个元素 |
-| `sgemm_shared.cu` | Shared Memory Tiling 优化 |
-| `sgemm_register.cu` | 寄存器分块优化（基础版）|
-| `sgemm_register_v2.cu` | 向量化访存 + Padding 优化 |
-| `sgemm_register_v3.cu` | 双缓冲 (Double Buffering) 优化 |
+
+| 文件                                | 说明                                 |
+| --------------------------------- | ---------------------------------- |
+| `sgemm_naive.cu`                  | 朴素 GEMM 实现，每个线程计算一个元素              |
+| `sgemm_shared.cu`                 | Shared Memory Tiling 优化            |
+| `sgemm_register.cu`               | 寄存器分块优化（基础版）                       |
+| `sgemm_register_v2.cu`            | 向量化访存 + Padding 优化                 |
+| `sgemm_register_v3.cu`            | 双缓冲 (Double Buffering) 优化          |
 | `sgemm_register_bank_conflict.cu` | **Bank Conflict 消除优化（Padding 方法）** |
-| `sgemm_cublas.cu` | cuBLAS 参考实现 |
-| `main.cu` | 测试框架主程序 |
-| `gemm_kernels.h` | 算子头文件声明 |
+| `sgemm_cublas.cu`                 | cuBLAS 参考实现                        |
+| `main.cu`                         | 测试框架主程序                            |
+| `gemm_kernels.h`                  | 算子头文件声明                            |
+
 
 ### 文档 (docs/)
 
-| 文档 | 内容 |
-|-----|------|
-| [bank_conflict_analysis.md](bank_conflict_analysis.md) | **Bank Conflict 深度解析（RTX 5090 视角）** |
-| [sgemm_register_analysis.md](sgemm_register_analysis.md) | 寄存器分块优化分析 |
-| [sgemm_register_code_explanation.md](sgemm_register_code_explanation.md) | 寄存器分块代码详解 |
-| [sgemm_register_v2_optimization.md](sgemm_register_v2_optimization.md) | V2 向量化优化详解 |
-| [cuda_thread_hierarchy.md](cuda_thread_hierarchy.md) | CUDA 线程层级详解 |
-| [roofline_analysis.md](roofline_analysis.md) | Roofline 模型分析 |
-| [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束分析 |
-| [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Kernel 详解 |
-| [cutlass_build.md](cutlass_build.md) | CUTLASS SGEMM 编译与依赖说明 |
-| **[cutlass_tutorial.md](cutlass_tutorial.md)** | **CUTLASS 完整教程（推荐入门）** |
-| [cute_build.md](cute_build.md) | CuTe (CUTLASS 3.x DSL) SGEMM 编译与使用说明 |
-| [triton_build.md](triton_build.md) | Triton Python DSL SGEMM 使用说明 |
+
+| 文档                                                                       | 内容                                   |
+| ------------------------------------------------------------------------ | ------------------------------------ |
+| [bank_conflict_analysis.md](bank_conflict_analysis.md)                   | **Bank Conflict 深度解析（RTX 5090 视角）**  |
+| [sgemm_register_analysis.md](sgemm_register_analysis.md)                 | 寄存器分块优化分析                            |
+| [sgemm_register_code_explanation.md](sgemm_register_code_explanation.md) | 寄存器分块代码详解                            |
+| [sgemm_register_v2_optimization.md](sgemm_register_v2_optimization.md)   | V2 向量化优化详解                           |
+| [cuda_thread_hierarchy.md](cuda_thread_hierarchy.md)                     | CUDA 线程层级详解                          |
+| [roofline_analysis.md](roofline_analysis.md)                             | Roofline 模型分析                        |
+| [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md)       | RTX 5090 硬件约束分析                      |
+| [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md)     | Shared Memory Kernel 详解              |
+| [cutlass_build.md](cutlass_build.md)                                     | CUTLASS SGEMM 编译与依赖说明                |
+| **[cutlass_tutorial.md](cutlass_tutorial.md)**                           | **CUTLASS 完整教程（推荐入门）**               |
+| [cute_build.md](cute_build.md)                                           | CuTe (CUTLASS 3.x DSL) SGEMM 编译与使用说明 |
+| [triton_build.md](triton_build.md)                                       | Triton Python DSL SGEMM 使用说明         |
+
 
 ### 编译与测试
 
@@ -256,3 +270,4 @@ make clean && make
 ...
 SGEMM_RegisterTiling_BankConflict 性能统计 ...
 ```
+
