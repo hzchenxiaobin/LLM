@@ -267,7 +267,7 @@ WMMA API 虽然好用，但为了达到 CUTLASS 或 cuBLAS 的水平，现代架
 make clean && make
 
 # 运行性能测试
-./benchmark_gemm
+./build/benchmark_gemm
 
 # 预期输出（在 RTX 5090 上）
 ========================================================

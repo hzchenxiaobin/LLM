@@ -132,14 +132,14 @@ nvidia-smi
 # 编译所有算子
 make
 
-# 生成可执行文件: benchmark_gemm
+# 生成可执行文件: build/benchmark_gemm
 ```
 
 ### 3. 运行测试
 
 ```bash
 # 运行基准测试
-./benchmark_gemm
+./build/benchmark_gemm
 ```
 
 **示例输出:**
@@ -172,7 +172,7 @@ int K = 4096;
 
 重新编译运行：
 ```bash
-make clean && make && ./benchmark_gemm
+make clean && make && ./build/benchmark_gemm
 ```
 
 ## 性能对比

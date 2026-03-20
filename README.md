@@ -89,7 +89,7 @@ LLM/
 ```bash
 cd GEMM
 make
-./benchmark_gemm
+./build/benchmark_gemm
 ```
 
 ### Reduction 项目编译与运行
