@@ -24,27 +24,27 @@ LLM/
 │   │       ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除优化
 │   │       ├── sgemm_register_vec_bank.cu   # 向量化 + Bank Conflict + 双缓冲 (V3)
 │   │       └── sgemm_cublas.cu     # cuBLAS 参考实现
-│   ├── docs/              # 详细技术文档
-│   │   ├── README.md                          # 文档入口与教程汇总
-│   │   ├── cuda_thread_hierarchy.md           # CUDA 线程层次与 SM 架构
-│   │   ├── roofline_analysis.md               # Roofline 性能模型
-│   │   ├── rtx5090_hardware_constraints.md    # GPU 硬件约束分析
-│   │   ├── sgemm_shared_kernel_explained.md   # 共享内存 Kernel 详解
-│   │   ├── sgemm_register_code_explanation.md # 寄存器 Kernel 逐行解读
-│   │   ├── sgemm_register_analysis.md         # 寄存器优化性能分析
-│   │   ├── sgemm_register_v2_optimization.md  # 向量化优化详解
-│   │   ├── bank_conflict_analysis.md          # Bank Conflict 深度解析
-│   │   └── 04_memory_coalescing.md            # 内存合并访问优化
-│   ├── exercises/         # 练习与面试题
-│   │   ├── occupancy_calculation_exercises.md        # Occupancy 计算练习题
-│   │   ├── gemm_basic_interview_questions.md         # 基础概念面试题
-│   │   ├── gemm_optimization_interview_questions.md  # 优化技术面试题
-│   │   ├── gemm_tensor_core_interview_questions.md   # Tensor Core 面试题
-│   │   └── gemm_practice_problems.md                 # 编程实践题
-│   └── scripts/           # 可视化脚本
-│       ├── generate_roofline.py         # 生成 Roofline 性能模型图
-│       ├── visualize_shared_gemm.py     # Shared GEMM 执行流程可视化
-│       └── visualize_register_gemm.py   # Register GEMM 执行流程可视化
+│   ├── docs/              # 历史文档（已整合到 /docs/ 目录）
+│   │   └── README.md      # 指向新版教程
+│   │
+│   └── ...
+│
+├── docs/                  # 【新版】体系化教程（推荐）
+│   ├── README.md              # 教程入口和学习路径
+│   ├── 01_cuda_fundamentals.md           # CUDA 基础与线程层级
+│   ├── 02_hardware_architecture.md     # RTX 5090 硬件架构
+│   ├── 03_gemm_naive.md                  # 朴素实现与瓶颈分析
+│   ├── 04_shared_memory_tiling.md        # Shared Memory 分块
+│   ├── 05_register_tiling.md             # 寄存器分块优化
+│   ├── 06_vectorization_and_bank_conflict.md  # 向量化与 Bank Conflict
+│   ├── 07_tensor_cores.md                # Tensor Core 优化
+│   ├── 08_performance_analysis.md        # Roofline 性能分析
+│   ├── 09_profiling_tools.md             # Nsight Compute 实战
+│   └── 10_batched_gemm.md                # 批量矩阵乘法
+│
+├── batch_gemm/            # 批量矩阵乘法实现
+│   └── docs/              # 批量 GEMM 文档（已整合到 /docs/）
+│
 └── reduction/             # CUDA Reduction 归约算子优化教程
     └── README.md          # Reduction 优化完整教程（6 步进阶）
 ```
@@ -104,22 +104,22 @@ Reduction 目录包含可直接编译运行的 CUDA 归约算子示例代码。
 
 ## 学习路径
 
-### 阶段 1: 基础概念
-- 阅读 `GEMM/docs/cuda_thread_hierarchy.md` 了解 CUDA 线程组织
-- 理解 `dim3`, `blockIdx`, `threadIdx`, SM 架构
+### 阶段 1: CUDA 基础与硬件架构（推荐）
+- 阅读 [`docs/01_cuda_fundamentals.md`](docs/01_cuda_fundamentals.md) 了解 CUDA 线程层级与内存体系
+- 阅读 [`docs/02_hardware_architecture.md`](docs/02_hardware_architecture.md) 理解 RTX 5090 硬件架构
 
 ### 阶段 2: GEMM 矩阵乘法优化进阶
 
 | 阶段 | 内容 | 文档 | 代码 |
 |:---|:---|:---|:---|
-| 2.1 | 朴素实现 | - | `sgemm_naive.cu` |
-| 2.2 | 共享内存分块 | `sgemm_shared_kernel_explained.md` | `sgemm_shared.cu` |
-| 2.3 | Roofline 分析 | `roofline_analysis.md` | `scripts/generate_roofline.py` |
-| 2.4 | 寄存器分块 V1 | `sgemm_register_code_explanation.md` | `sgemm_register.cu` |
-| 2.5 | 向量化优化 V2 | `sgemm_register_v2_optimization.md` | `sgemm_register_vectorized.cu` |
-| 2.6 | Bank Conflict 消除 | `bank_conflict_analysis.md` | `sgemm_register_bank_conflict.cu` |
-| 2.7 | 双缓冲优化 V3 | `sgemm_register_analysis.md` | `sgemm_register_vec_bank.cu` |
-| 2.8 | 硬件深入 | `rtx5090_hardware_constraints.md` | `exercises/occupancy_calculation_exercises.md` |
+| 2.1 | 朴素实现 | [`03_gemm_naive.md`](docs/03_gemm_naive.md) | `sgemm_naive.cu` |
+| 2.2 | 共享内存分块 | [`04_shared_memory_tiling.md`](docs/04_shared_memory_tiling.md) | `sgemm_shared.cu` |
+| 2.3 | 寄存器分块 | [`05_register_tiling.md`](docs/05_register_tiling.md) | `sgemm_register.cu` |
+| 2.4 | 向量化与 Bank Conflict | [`06_vectorization_and_bank_conflict.md`](docs/06_vectorization_and_bank_conflict.md) | `sgemm_register_vec_bank.cu` |
+| 2.5 | Tensor Core 优化 | [`07_tensor_cores.md`](docs/07_tensor_cores.md) | 参考代码 |
+| 2.6 | 性能分析 | [`08_performance_analysis.md`](docs/08_performance_analysis.md) | `scripts/generate_roofline.py` |
+| 2.7 | 调试工具 | [`09_profiling_tools.md`](docs/09_profiling_tools.md) | Nsight Compute |
+| 2.8 | 批量 GEMM | [`10_batched_gemm.md`](docs/10_batched_gemm.md) | `batch_gemm/` |
 
 ### 阶段 3: Reduction 归约优化进阶
 
@@ -187,25 +187,30 @@ Grid (整个问题空间)
 
 | 文档 | 内容描述 | 推荐阶段 |
 |:---|:---|:---:|
-| `docs/cuda_thread_hierarchy.md` | CUDA 线程层次与 SM 架构 | 1 |
-| `docs/roofline_analysis.md` | Roofline 模型与 Arithmetic Intensity | 2 |
-| `docs/sgemm_shared_kernel_explained.md` | Shared Memory Kernel 详解 | 3 |
-| `docs/sgemm_register_code_explanation.md` | Register Kernel 逐行解读 | 4 |
-| `docs/sgemm_register_analysis.md` | 各版本性能对比分析 | 4 |
-| `docs/sgemm_register_v2_optimization.md` | 向量化优化详解 | 5 |
-| `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析 | 5 |
-| `docs/rtx5090_hardware_constraints.md` | GPU 硬件约束详解 | 6 |
-| `docs/04_memory_coalescing.md` | 内存合并访问优化 | 补充 |
+| [`docs/01_cuda_fundamentals.md`](docs/01_cuda_fundamentals.md) | CUDA 线程层级与内存体系 | 1 |
+| [`docs/02_hardware_architecture.md`](docs/02_hardware_architecture.md) | RTX 5090 硬件架构详解 | 1 |
+| [`docs/03_gemm_naive.md`](docs/03_gemm_naive.md) | 朴素实现与瓶颈分析 | 2 |
+| [`docs/04_shared_memory_tiling.md`](docs/04_shared_memory_tiling.md) | Shared Memory Tiling | 3 |
+| [`docs/05_register_tiling.md`](docs/05_register_tiling.md) | 寄存器分块与外积计算 | 4 |
+| [`docs/06_vectorization_and_bank_conflict.md`](docs/06_vectorization_and_bank_conflict.md) | 向量化与 Bank Conflict 消除 | 5 |
+| [`docs/07_tensor_cores.md`](docs/07_tensor_cores.md) | Tensor Core 优化 | 6 |
+| [`docs/08_performance_analysis.md`](docs/08_performance_analysis.md) | Roofline 模型分析 | 4 |
+| [`docs/09_profiling_tools.md`](docs/09_profiling_tools.md) | Nsight Compute 实战 | 7 |
+| [`docs/10_batched_gemm.md`](docs/10_batched_gemm.md) | 批量矩阵乘法 | 扩展 |
+
+### 历史文档（已整合）
+
+`GEMM/docs/` 目录下的旧文档内容已整合到新版教程，仅供参考。详见 [`GEMM/docs/README.md`](GEMM/docs/README.md)。
 
 ### 练习题与面试题
 
 | 文档 | 类型 | 说明 |
 |:---|:---|:---|
-| `exercises/occupancy_calculation_exercises.md` | 计算题 | Occupancy 计算练习 |
-| `exercises/gemm_basic_interview_questions.md` | 面试题 | 基础概念面试题 |
-| `exercises/gemm_optimization_interview_questions.md` | 面试题 | 优化技术面试题 |
-| `exercises/gemm_tensor_core_interview_questions.md` | 面试题 | Tensor Core 面试题 |
-| `exercises/gemm_practice_problems.md` | 编程题 | 编程实践题 |
+| `GEMM/exercises/occupancy_calculation_exercises.md` | 计算题 | Occupancy 计算练习 |
+| `GEMM/exercises/gemm_basic_interview_questions.md` | 面试题 | 基础概念面试题 |
+| `GEMM/exercises/gemm_optimization_interview_questions.md` | 面试题 | 优化技术面试题 |
+| `GEMM/exercises/gemm_tensor_core_interview_questions.md` | 面试题 | Tensor Core 面试题 |
+| `GEMM/exercises/gemm_practice_problems.md` | 编程题 | 编程实践题 |
 
 ## 参考资料
 

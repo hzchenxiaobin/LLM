@@ -202,57 +202,63 @@ python3 scripts/visualize_register_gemm.py
 
 ## 学习路径
 
+> **新版体系化教程已移动到 `/docs/` 目录**
+
 ### 阶段 1: 基础概念
-- 阅读 `docs/cuda_thread_hierarchy.md` 了解 CUDA 线程组织
-- 理解 `dim3`, `blockIdx`, `threadIdx`, SM 架构
+- 阅读 [`/docs/01_cuda_fundamentals.md`](/docs/01_cuda_fundamentals.md) 了解 CUDA 线程组织
+- 阅读 [`/docs/02_hardware_architecture.md`](/docs/02_hardware_architecture.md) 理解 RTX 5090 硬件架构
 
 ### 阶段 2: 朴素实现
-- 阅读 `src/gemm/sgemm_naive.cu`
+- 阅读 [`/docs/03_gemm_naive.md`](/docs/03_gemm_naive.md)
 - 理解基础并行实现和性能瓶颈（频繁全局内存访问）
 
 ### 阶段 3: 共享内存优化
-- 阅读 `src/gemm/sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
+- 阅读 [`/docs/04_shared_memory_tiling.md`](/docs/04_shared_memory_tiling.md)
 - 理解 Shared Memory Tiling 原理
+- 阅读代码 `src/gemm/sgemm_shared.cu`
 - 运行 `scripts/visualize_shared_gemm.py` 生成图解
 
 ### 阶段 4: 性能分析
-- 阅读 `docs/roofline_analysis.md`
+- 阅读 [`/docs/08_performance_analysis.md`](/docs/08_performance_analysis.md)
 - 运行 `scripts/generate_roofline.py` 生成图表
-- 理解 Arithmetic Intensity 概念
+- 理解 Arithmetic Intensity 和 Roofline 模型
 
 ### 阶段 5: 寄存器优化
-- 阅读 `src/gemm/sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
+- 阅读 [`/docs/05_register_tiling.md`](/docs/05_register_tiling.md)
 - 理解双层分块策略和外积计算
-- 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
+- 阅读代码 `src/gemm/sgemm_register.cu`
 
 ### 阶段 6: 进阶优化
-- **V2 向量化**: `sgemm_register_vectorized.cu`, `docs/sgemm_register_v2_optimization.md`
+- **向量化与 Bank Conflict**: [`/docs/06_vectorization_and_bank_conflict.md`](/docs/06_vectorization_and_bank_conflict.md)
   - float4 向量化加载，128-bit 协作访存
-- **Bank Conflict 消除**: `sgemm_register_bank_conflict.cu`, `docs/bank_conflict_analysis.md`
   - Shared Memory Padding，理解 `bank = (address / 4) % 32`
-- **V3 综合优化 (VecBank)**: `sgemm_register_vec_bank.cu`
-  - 向量化 + Padding 综合优化，最大化带宽利用率
+- **Tensor Core**: [`/docs/07_tensor_cores.md`](/docs/07_tensor_cores.md)
+  - WMMA API 和 Tensor Core 编程
 
-### 阶段 7: 硬件深入
-- 阅读 `docs/rtx5090_hardware_constraints.md`
+### 阶段 7: 性能调试
+- 阅读 [`/docs/09_profiling_tools.md`](/docs/09_profiling_tools.md)
 - 完成 `exercises/occupancy_calculation_exercises.md` 练习题
-- 理解寄存器限制、共享内存限制、Warp 调度
+- 使用 Nsight Compute 进行实际性能分析
 
 ## 文档索引
 
-### 核心技术文档
+### 新版体系化教程（推荐）
 
 | 文档 | 内容描述 | 推荐阶段 |
 |:---|:---|:---:|
-| `docs/roofline_analysis.md` | Roofline 模型与 Arithmetic Intensity | 4 |
-| `docs/cuda_thread_hierarchy.md` | CUDA 线程层次与 SM 架构 | 1 |
-| `docs/sgemm_shared_kernel_explained.md` | Shared Memory Kernel 详解 | 3 |
-| `docs/sgemm_register_code_explanation.md` | Register Kernel 逐行解读 | 5 |
-| `docs/sgemm_register_analysis.md` | Register vs Shared 性能对比 | 5 |
-| `docs/sgemm_register_v2_optimization.md` | 向量化优化详解 (V2) | 6 |
-| `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析 | 6 |
-| `docs/rtx5090_hardware_constraints.md` | GPU 硬件约束详解 | 7 |
-| `docs/04_memory_coalescing.md` | 内存合并访问优化 | 补充 |
+| [`/docs/01_cuda_fundamentals.md`](/docs/01_cuda_fundamentals.md) | CUDA 线程层级与内存体系 | 1 |
+| [`/docs/02_hardware_architecture.md`](/docs/02_hardware_architecture.md) | RTX 5090 硬件详解 | 1 |
+| [`/docs/03_gemm_naive.md`](/docs/03_gemm_naive.md) | 朴素实现与瓶颈分析 | 2 |
+| [`/docs/04_shared_memory_tiling.md`](/docs/04_shared_memory_tiling.md) | Shared Memory Tiling | 3 |
+| [`/docs/05_register_tiling.md`](/docs/05_register_tiling.md) | 寄存器分块与外积计算 | 5 |
+| [`/docs/06_vectorization_and_bank_conflict.md`](/docs/06_vectorization_and_bank_conflict.md) | 向量化与 Bank Conflict 消除 | 6 |
+| [`/docs/07_tensor_cores.md`](/docs/07_tensor_cores.md) | Tensor Core 优化 | 6 |
+| [`/docs/08_performance_analysis.md`](/docs/08_performance_analysis.md) | Roofline 模型分析 | 4 |
+| [`/docs/09_profiling_tools.md`](/docs/09_profiling_tools.md) | Nsight Compute 实战 | 7 |
+
+### 本目录遗留文档（历史版本）
+
+`docs/` 目录下的旧文档内容已整合到新版教程，仅供参考。详见 [`docs/README.md`](docs/README.md)。
 
 ### 练习题与面试题
 
