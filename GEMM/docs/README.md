@@ -231,34 +231,60 @@ WMMA API 虽然好用，但为了达到 CUTLASS 或 cuBLAS 的水平，现代架
 
 ### 实现文件 (src/)
 
+#### Kernel 实现文件 (src/gemm/)
+
+| 文件 | 优化阶段 | 核心优化技术 | 预期性能 |
+|:---|:---:|:---|:---:|
+| `sgemm_naive.cu` | V0 | 朴素实现，每个线程计算 1 个元素 | ~7 TFLOPS |
+| `sgemm_shared.cu` | V1 | Shared Memory Tiling，减少全局内存访问 | ~9 TFLOPS |
+| `sgemm_register.cu` | V2 | 寄存器分块 (8x8 Thread Tile)，双层 Tiling | ~30-40 TFLOPS |
+| `sgemm_register_vectorized.cu` | V2+ | float4 向量化加载 (128-bit) | ~35-45 TFLOPS |
+| `sgemm_register_bank_conflict.cu` | V2+ | Shared Memory Padding 消除 Bank Conflict | ~35-45 TFLOPS |
+| `sgemm_register_vec_bank.cu` | V3 | **向量化 + Padding + 双缓冲综合优化** | ~40-50 TFLOPS |
+| `sgemm_cublas.cu` | - | cuBLAS 参考实现 (性能上限基准) | 60-70 TFLOPS |
+
+#### 测试框架文件
+
 | 文件 | 说明 |
-|------|------|
-| `sgemm_naive.cu` | 朴素 GEMM 实现，每个线程计算一个元素 |
-| `sgemm_shared.cu` | Shared Memory Tiling 优化 |
-| `sgemm_register.cu` | 寄存器分块优化（基础版） |
-| `sgemm_register_v2.cu` | 向量化访存 + Padding 优化 |
-| `sgemm_register_v3.cu` | 双缓冲 (Double Buffering) 优化 |
-| `sgemm_register_bank_conflict.cu` | **Bank Conflict 消除优化（Padding 方法）** |
-| `sgemm_cublas.cu` | cuBLAS 参考实现 |
-| `main.cu` | 测试框架主程序 |
-| `gemm_kernels.h` | 算子头文件声明 |
+|:---|:---|
+| `main.cu` | 基准测试主程序，包含性能统计与正确性验证 |
+| `common.h` | 公共工具头文件（CUDA 错误检查宏等） |
+| `gemm_kernels.h` | 所有 Kernel 函数的统一声明入口 |
 
 ### 文档 (docs/)
 
+#### 核心概念文档（必读基础）
+
+| 文档 | 内容 | 建议阶段 |
+|:---|:---|:---:|
+| [cuda_thread_hierarchy.md](cuda_thread_hierarchy.md) | CUDA 线程层级与 SM 架构详解 | 1 |
+| [roofline_analysis.md](roofline_analysis.md) | Roofline 性能模型与 Arithmetic Intensity | 2 |
+| [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束与 Occupancy 计算 | 7 |
+
+#### SGEMM 实现详解文档
+
+| 文档 | 内容 | 建议阶段 |
+|:---|:---|:---:|
+| [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Tiling Kernel 逐行解读 | 3 |
+| [sgemm_register_code_explanation.md](sgemm_register_code_explanation.md) | 寄存器分块 Kernel 逐行详解 | 5 |
+| [sgemm_register_analysis.md](sgemm_register_analysis.md) | 各版本寄存器优化性能对比分析 | 5 |
+| [sgemm_register_v2_optimization.md](sgemm_register_v2_optimization.md) | 向量化加载 (float4) 优化详解 | 6 |
+| [bank_conflict_analysis.md](bank_conflict_analysis.md) | **Shared Memory Bank Conflict 深度解析** | 6 |
+
+#### 进阶工具与框架文档
+
+| 文档 | 内容 | 难度 |
+|:---|:---|:---:|
+| **[cutlass_tutorial.md](cutlass_tutorial.md)** | **CUTLASS 完整入门教程（强烈推荐）** | 中级 |
+| [cutlass_build.md](cutlass_build.md) | CUTLASS SGEMM 编译配置与依赖说明 | 中级 |
+| [cute_build.md](cute_build.md) | CuTe (CUTLASS 3.x DSL) SGEMM 编译使用 | 高级 |
+| [triton_build.md](triton_build.md) | Triton Python DSL SGEMM 使用说明 | 高级 |
+
+#### 补充阅读
+
 | 文档 | 内容 |
-|------|------|
-| [bank_conflict_analysis.md](bank_conflict_analysis.md) | **Bank Conflict 深度解析（RTX 5090 视角）** |
-| [sgemm_register_analysis.md](sgemm_register_analysis.md) | 寄存器分块优化分析 |
-| [sgemm_register_code_explanation.md](sgemm_register_code_explanation.md) | 寄存器分块代码详解 |
-| [sgemm_register_v2_optimization.md](sgemm_register_v2_optimization.md) | V2 向量化优化详解 |
-| [cuda_thread_hierarchy.md](cuda_thread_hierarchy.md) | CUDA 线程层级详解 |
-| [roofline_analysis.md](roofline_analysis.md) | Roofline 模型分析 |
-| [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束分析 |
-| [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Kernel 详解 |
-| [cutlass_build.md](cutlass_build.md) | CUTLASS SGEMM 编译与依赖说明 |
-| **[cutlass_tutorial.md](cutlass_tutorial.md)** | **CUTLASS 完整教程（推荐入门）** |
-| [cute_build.md](cute_build.md) | CuTe (CUTLASS 3.x DSL) SGEMM 编译与使用说明 |
-| [triton_build.md](triton_build.md) | Triton Python DSL SGEMM 使用说明 |
+|:---|:---|
+| [04_memory_coalescing.md](04_memory_coalescing.md) | 内存合并访问优化原理 |
 
 ### 编译与测试
 
