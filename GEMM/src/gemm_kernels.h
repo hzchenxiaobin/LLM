@@ -36,5 +36,8 @@ void run_sgemm_wmma_v2(int M, int N, int K, float alpha, const float *A, const f
 // 4. cuBLAS GEMM (基准)
 void run_cublas(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 
+// 6. CUTLASS SGEMM (Row-Major，需 CUTLASS 头文件，见 docs/cutlass_build.md)
+void run_sgemm_cutlass(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
 // 4.1 cuBLAS TensorCore GEMM (FP16输入+FP32累加，作为WMMA实现的基准)
 void run_cublas_tensorcore(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);

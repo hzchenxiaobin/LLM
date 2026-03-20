@@ -177,6 +177,11 @@ int main() {
     benchmark_gemm("cuBLAS SGEMM (Reference / Upper Bound)", run_cublas, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, false, peak_tflops);
     CHECK_CUDA(cudaMemcpy(h_C_ref.data(), d_C, size_C, cudaMemcpyDeviceToHost));
 
+#if GEMM_HAVE_CUTLASS
+    // 0.5 CUTLASS SGEMM (Row-Major，与手写 kernel 布局一致)
+    benchmark_gemm("CUTLASS SGEMM (Row-Major)", run_sgemm_cutlass, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+#endif
+
     // 1. Naive 版本
     benchmark_gemm("SGEMM_Naive", run_sgemm_naive, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
     

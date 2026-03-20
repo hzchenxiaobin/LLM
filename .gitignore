@@ -34,3 +34,6 @@ core.*
 build/
 dist/
 cmake-build-*/
+
+# GEMM 第三方依赖（按需 git clone，见 GEMM/docs/cutlass_build.md）
+GEMM/third_party/cutlass/

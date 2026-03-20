@@ -233,6 +233,7 @@ __global__ void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
 | [roofline_analysis.md](roofline_analysis.md) | Roofline 模型分析 |
 | [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束分析 |
 | [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Kernel 详解 |
+| [cutlass_build.md](cutlass_build.md) | CUTLASS SGEMM 编译与依赖说明 |
 
 ### 编译与测试
 
