@@ -27,12 +27,6 @@ void run_sgemm_register_v3(int M, int N, int K, float alpha, const float *A, con
 // 3.7 Bank Conflict优化版寄存器分块 GEMM (Shared Memory Padding)
 void run_sgemm_register_bank_conflict(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 
-// 5. Tensor Core GEMM (WMMA)
-void run_sgemm_wmma(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
-
-// 5.1 Tensor Core GEMM v2 (简化版，Block 内协同加载)
-void run_sgemm_wmma_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
-
 // 4. cuBLAS GEMM (基准)
 void run_cublas(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
 

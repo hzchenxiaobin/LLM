@@ -1,6 +1,6 @@
 # CUDA SGEMM 优化教程
 
-一个从朴素实现到 Tensor Core 优化的完整 CUDA 矩阵乘法学习项目，通过 9 个递进式算子实现，展示 GPU 编程的核心优化技术。
+一个从朴素实现到 CUDA Core 极致优化的完整 CUDA 矩阵乘法学习项目，通过 7 个递进式算子实现，展示 GPU 编程的核心优化技术。
 
 ## 目录
 
@@ -31,7 +31,7 @@ C = alpha × A × B + beta × C
 
 ### 项目特点
 
-- **渐进式学习**: 从 7 TFLOPS 的朴素实现到 70+ TFLOPS 的 Tensor Core 优化
+- **渐进式学习**: 从 7 TFLOPS 的朴素实现到 50+ TFLOPS 的 CUDA Core 极致优化
 - **完整文档**: 10+ 篇技术文档深入解析每个优化技术
 - **实战导向**: 包含练习题、面试题和可视化工具
 - **硬件适配**: 支持 Volta/Turing/Ampere/Hopper/Blackwell 架构
@@ -47,8 +47,6 @@ C = alpha × A × B + beta × C
 | 4 | **Register V2** | `sgemm_register_v2.cu` | 向量化加载 (float4) + Padding | ~35-55 TFLOPS |
 | 5 | **Register V3** | `sgemm_register_v3.cu` | 双缓冲 (Double Buffering) | ~40-60 TFLOPS |
 | 6 | **Bank Conflict** | `sgemm_register_bank_conflict.cu` | Bank Conflict 消除 | ~35-55 TFLOPS |
-| 7 | **WMMA** | `sgemm_wmma.cu` | Tensor Core WMMA API | ~40-70 TFLOPS |
-| 8 | **WMMA V2** | `sgemm_wmma_v2.cu` | Tensor Core 优化版本 | ~45-75 TFLOPS |
 
 ### 关键优化技术详解
 
@@ -60,7 +58,6 @@ C = alpha × A × B + beta × C
 | **向量化加载** | 提高带宽利用率 | 128-bit 协作加载 |
 | **Shared Memory Padding** | 消除 Bank Conflict | 冲突-free 访存 |
 | **双缓冲** | 隐藏数据加载延迟 | 计算与访存重叠 |
-| **Tensor Core** | 利用专用矩阵计算单元 | FP16/FP32 混合精度加速 |
 
 ## 项目结构
 
@@ -81,9 +78,7 @@ GEMM/
 │       ├── sgemm_register.cu    # 寄存器分块
 │       ├── sgemm_register_v2.cu # 向量化优化
 │       ├── sgemm_register_v3.cu # 双缓冲优化
-│       ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除
-│       ├── sgemm_wmma.cu        # Tensor Core WMMA
-│       └── sgemm_wmma_v2.cu     # Tensor Core 优化版
+│       └── sgemm_register_bank_conflict.cu  # Bank Conflict 消除
 │
 ├── docs/                        # 技术文档
 │   ├── README.md                # 文档入口
@@ -187,7 +182,6 @@ make clean && make && ./benchmark_gemm
 | 算子 | 性能 (TFLOPS) | 利用率 | vs Naive | vs cuBLAS |
 |:---|:---:|:---:|:---:|:---:|
 | **cuBLAS** | 58-65 | 70-79% | 8-9× | 100% |
-| **WMMA V2** | 45-55 | 55-67% | 6-7× | 78-85% |
 | **Register V3** | 40-50 | 48-61% | 5-6× | 69-77% |
 | **Register V2** | 35-45 | 42-55% | 4-5× | 60-69% |
 | **Register Bank Conflict** | 35-45 | 42-55% | 4-5× | 60-69% |
@@ -239,11 +233,7 @@ python3 scripts/visualize_register_gemm.py
 - **V3 双缓冲**: `sgemm_register_v3.cu`
   - 计算与访存重叠，软件流水线
 
-### 阶段 7: Tensor Core
-- 阅读 `src/gemm/sgemm_wmma.cu` 和 `sgemm_wmma_v2.cu`
-- 学习 WMMA API 和混合精度计算
-
-### 阶段 8: 硬件深入
+### 阶段 7: 硬件深入
 - 阅读 `docs/rtx5090_hardware_constraints.md`
 - 完成 `exercises/occupancy_calculation_exercises.md` 练习题
 - 理解寄存器限制、共享内存限制、Warp 调度
@@ -261,7 +251,7 @@ python3 scripts/visualize_register_gemm.py
 | `docs/sgemm_register_analysis.md` | Register vs Shared 性能对比 | 5 |
 | `docs/sgemm_register_v2_optimization.md` | V2 向量化优化详解 | 6 |
 | `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析 | 6 |
-| `docs/rtx5090_hardware_constraints.md` | GPU 硬件约束详解 | 8 |
+| `docs/rtx5090_hardware_constraints.md` | GPU 硬件约束详解 | 7 |
 | `docs/04_memory_coalescing.md` | 内存合并访问优化 | 补充 |
 
 ### 练习题与面试题
@@ -271,7 +261,6 @@ python3 scripts/visualize_register_gemm.py
 | `exercises/occupancy_calculation_exercises.md` | Occupancy 计算 | 8 道 |
 | `exercises/gemm_basic_interview_questions.md` | 基础概念面试题 | - |
 | `exercises/gemm_optimization_interview_questions.md` | 优化技术面试题 | - |
-| `exercises/gemm_tensor_core_interview_questions.md` | Tensor Core 面试题 | - |
 | `exercises/gemm_practice_problems.md` | 编程实践题 | - |
 
 ## 常见问题

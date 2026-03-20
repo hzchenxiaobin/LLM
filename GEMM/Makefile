@@ -1,6 +1,6 @@
 # 编译器设置
 NVCC = nvcc
-# 编译参数：开启最高级别优化，启用 WMMA Tensor Core (需要 sm_70+)
+# 编译参数：开启最高级别优化
 NVCC_FLAGS = -O3 -std=c++14 -arch=sm_70
 # 链接器参数：链接 cuBLAS 库
 LIBS = -lcublas
@@ -15,7 +15,7 @@ TARGET = benchmark_gemm
 # GEMM 算子对象文件
 GEMM_OBJS = $(GEMM_DIR)/sgemm_cublas.o $(GEMM_DIR)/sgemm_naive.o $(GEMM_DIR)/sgemm_shared.o \
             $(GEMM_DIR)/sgemm_register.o $(GEMM_DIR)/sgemm_register_v2.o $(GEMM_DIR)/sgemm_register_v3.o \
-            $(GEMM_DIR)/sgemm_register_bank_conflict.o $(GEMM_DIR)/sgemm_wmma.o $(GEMM_DIR)/sgemm_wmma_v2.o
+            $(GEMM_DIR)/sgemm_register_bank_conflict.o
 
 # 主程序对象文件
 MAIN_OBJ = $(SRC_DIR)/main.o
@@ -67,14 +67,6 @@ $(GEMM_DIR)/sgemm_register_v3.o: $(GEMM_DIR)/sgemm_register_v3.cu $(SRC_DIR)/com
 # 编译Bank Conflict优化版寄存器分块 GEMM 文件
 $(GEMM_DIR)/sgemm_register_bank_conflict.o: $(GEMM_DIR)/sgemm_register_bank_conflict.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
 	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_register_bank_conflict.cu -o $(GEMM_DIR)/sgemm_register_bank_conflict.o
-
-# 编译 Tensor Core WMMA GEMM 文件
-$(GEMM_DIR)/sgemm_wmma.o: $(GEMM_DIR)/sgemm_wmma.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
-	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_wmma.cu -o $(GEMM_DIR)/sgemm_wmma.o
-
-# 编译 Tensor Core WMMA v2 GEMM 文件
-$(GEMM_DIR)/sgemm_wmma_v2.o: $(GEMM_DIR)/sgemm_wmma_v2.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
-	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_wmma_v2.cu -o $(GEMM_DIR)/sgemm_wmma_v2.o
 
 # 清理编译产物
 clean:
