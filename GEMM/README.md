@@ -43,10 +43,10 @@ C = alpha × A × B + beta × C
 | 0 | **cuBLAS** | `sgemm_cublas.cu` | NVIDIA 官方高度优化库 | 60-70 TFLOPS |
 | 1 | **Naive** | `sgemm_naive.cu` | 基础并行实现 | ~7 TFLOPS |
 | 2 | **Shared Memory** | `sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
-| 3 | **Register Tiling** | `sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
-| 4 | **Register V2** | `sgemm_register_v2.cu` | 向量化加载 (float4) + Padding | ~35-55 TFLOPS |
-| 5 | **Register V3** | `sgemm_register_v3.cu` | 双缓冲 (Double Buffering) | ~40-60 TFLOPS |
-| 6 | **Bank Conflict** | `sgemm_register_bank_conflict.cu` | Bank Conflict 消除 | ~35-55 TFLOPS |
+| 3 | **Register Tiling** | `sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-40 TFLOPS |
+| 4 | **Register Vectorized** | `sgemm_register_vectorized.cu` | 向量化加载 (float4) | ~35-45 TFLOPS |
+| 5 | **Register Bank Conflict** | `sgemm_register_bank_conflict.cu` | Padding 消除 Bank Conflict | ~35-45 TFLOPS |
+| 6 | **Register VecBank** | `sgemm_register_vec_bank.cu` | 向量化 + Padding 综合优化 | ~40-50 TFLOPS |
 
 ### 关键优化技术详解
 
@@ -75,10 +75,10 @@ GEMM/
 │       ├── sgemm_cublas.cu      # cuBLAS 参考实现
 │       ├── sgemm_naive.cu       # 朴素实现
 │       ├── sgemm_shared.cu      # 共享内存优化
-│       ├── sgemm_register.cu    # 寄存器分块
-│       ├── sgemm_register_v2.cu # 向量化优化
-│       ├── sgemm_register_v3.cu # 双缓冲优化
-│       └── sgemm_register_bank_conflict.cu  # Bank Conflict 消除
+│       ├── sgemm_register.cu    # 寄存器分块 (V1)
+│       ├── sgemm_register_vectorized.cu # 向量化优化 (V2)
+│       ├── sgemm_register_bank_conflict.cu # Bank Conflict 消除
+│       └── sgemm_register_vec_bank.cu # 向量化 + Padding 综合优化 (V3)
 │
 ├── docs/                        # 技术文档
 │   ├── README.md                # 文档入口
@@ -182,11 +182,11 @@ make clean && make && ./benchmark_gemm
 | 算子 | 性能 (TFLOPS) | 利用率 | vs Naive | vs cuBLAS |
 |:---|:---:|:---:|:---:|:---:|
 | **cuBLAS** | 58-65 | 70-79% | 8-9× | 100% |
-| **Register V3** | 40-50 | 48-61% | 5-6× | 69-77% |
-| **Register V2** | 35-45 | 42-55% | 4-5× | 60-69% |
+| **Register VecBank (V3)** | 40-50 | 48-61% | 5-6× | 69-77% |
+| **Register Vectorized (V2)** | 35-45 | 42-55% | 4-5× | 60-69% |
 | **Register Bank Conflict** | 35-45 | 42-55% | 4-5× | 60-69% |
-| **Register** | 30-40 | 36-48% | 4-5× | 52-62% |
-| **Shared** | 9-10 | 11-12% | 1.3× | 15-17% |
+| **Register Tiling (V1)** | 30-40 | 36-48% | 4-5× | 52-62% |
+| **Shared Memory** | 9-10 | 11-12% | 1.3× | 15-17% |
 | **Naive** | 7-8 | 8-10% | 1× | 12-14% |
 
 ### 性能可视化
@@ -226,12 +226,12 @@ python3 scripts/visualize_register_gemm.py
 - 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
 
 ### 阶段 6: 进阶优化
-- **V2 向量化**: `sgemm_register_v2.cu`, `docs/sgemm_register_v2_optimization.md`
+- **V2 向量化**: `sgemm_register_vectorized.cu`, `docs/sgemm_register_v2_optimization.md`
   - float4 向量化加载，128-bit 协作访存
-- **Bank Conflict**: `sgemm_register_bank_conflict.cu`, `docs/bank_conflict_analysis.md`
-  - 理解 `bank = (address / 4) % 32`
-- **V3 双缓冲**: `sgemm_register_v3.cu`
-  - 计算与访存重叠，软件流水线
+- **Bank Conflict 消除**: `sgemm_register_bank_conflict.cu`, `docs/bank_conflict_analysis.md`
+  - Shared Memory Padding，理解 `bank = (address / 4) % 32`
+- **V3 综合优化 (VecBank)**: `sgemm_register_vec_bank.cu`
+  - 向量化 + Padding 综合优化，最大化带宽利用率
 
 ### 阶段 7: 硬件深入
 - 阅读 `docs/rtx5090_hardware_constraints.md`
@@ -249,7 +249,7 @@ python3 scripts/visualize_register_gemm.py
 | `docs/sgemm_shared_kernel_explained.md` | Shared Memory Kernel 详解 | 3 |
 | `docs/sgemm_register_code_explanation.md` | Register Kernel 逐行解读 | 5 |
 | `docs/sgemm_register_analysis.md` | Register vs Shared 性能对比 | 5 |
-| `docs/sgemm_register_v2_optimization.md` | V2 向量化优化详解 | 6 |
+| `docs/sgemm_register_v2_optimization.md` | 向量化优化详解 (V2) | 6 |
 | `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析 | 6 |
 | `docs/rtx5090_hardware_constraints.md` | GPU 硬件约束详解 | 7 |
 | `docs/04_memory_coalescing.md` | 内存合并访问优化 | 补充 |
