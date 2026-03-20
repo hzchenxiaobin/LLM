@@ -8,7 +8,7 @@
 //
 // 依赖：NVIDIA CUTLASS 3.x 头文件（包含 cute/tensor.hpp）
 
-#include "common.h"
+#include "../common.h"
 #include "gemm_kernels.h"
 
 #include <iostream>

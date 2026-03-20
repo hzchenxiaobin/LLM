@@ -1,7 +1,7 @@
 // 当未检测到 CUTLASS 头文件时由 Makefile 编译此文件，仅用于满足链接符号。
 // 若误调用会 abort（正常流程下 main 在 GEMM_HAVE_CUTLASS=0 时不会调用）。
 
-#include "common.h"
+#include "../common.h"
 #include "gemm_kernels.h"
 
 #include <cstdlib>

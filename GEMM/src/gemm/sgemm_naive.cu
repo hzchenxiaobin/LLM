@@ -1,4 +1,4 @@
-#include "common.h"
+#include "../common.h"
 #include "gemm_kernels.h"
 
 // --- 算子 1: 朴素 GEMM (Naive) ---

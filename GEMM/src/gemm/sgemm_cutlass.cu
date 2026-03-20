@@ -6,7 +6,7 @@
 //
 // 依赖：NVIDIA CUTLASS 头文件（见 GEMM/docs/cutlass_build.md）
 
-#include "common.h"
+#include "../common.h"
 #include "gemm_kernels.h"
 
 #include <iostream>

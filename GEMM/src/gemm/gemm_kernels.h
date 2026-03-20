@@ -1,0 +1,46 @@
+#pragma once
+#include <cublas_v2.h>
+#include "../common.h"
+
+// 声明全局的 cuBLAS 句柄，供主函数和算子实现使用
+extern cublasHandle_t cublas_handle;
+
+// ==========================================
+// GEMM 算子包装函数声明
+// ==========================================
+
+// 1. 朴素 GEMM
+void run_sgemm_naive(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 2. 共享内存 GEMM
+void run_sgemm_shared(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 3. 寄存器分块 GEMM
+void run_sgemm_register(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 3.5 优化版寄存器分块 GEMM (Vectorized + Padding)
+void run_sgemm_register_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 3.6 双缓冲优化版寄存器分块 GEMM (Double Buffering)
+void run_sgemm_register_v3(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 3.7 Bank Conflict优化版寄存器分块 GEMM (Shared Memory Padding)
+void run_sgemm_register_bank_conflict(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 5. Tensor Core GEMM (WMMA)
+void run_sgemm_wmma(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 5.1 Tensor Core GEMM v2 (简化版，Block 内协同加载)
+void run_sgemm_wmma_v2(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 4. cuBLAS GEMM (基准)
+void run_cublas(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 6. CUTLASS SGEMM (Row-Major，需 CUTLASS 头文件，见 docs/cutlass_build.md)
+void run_sgemm_cutlass(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 6.5 CuTe SGEMM (使用 CUTLASS 3.x DSL 实现，见 docs/cute_build.md)
+void run_sgemm_cute(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);
+
+// 4.1 cuBLAS TensorCore GEMM (FP16输入+FP32累加，作为WMMA实现的基准)
+void run_cublas_tensorcore(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C);

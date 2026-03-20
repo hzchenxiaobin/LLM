@@ -1,7 +1,7 @@
 // CuTe SGEMM 占位实现
 // 当 CUTLASS/CuTe 头文件未找到时使用
 
-#include "common.h"
+#include "../common.h"
 #include "gemm_kernels.h"
 
 #include <iostream>
