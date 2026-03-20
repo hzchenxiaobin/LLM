@@ -1,6 +1,6 @@
 # CUDA SGEMM 优化教程
 
-一个从朴素实现到 Tensor Core 优化的完整 CUDA 矩阵乘法学习项目，通过 11 个递进式算子实现，展示 GPU 编程的核心优化技术。
+一个从朴素实现到 Tensor Core 优化的完整 CUDA 矩阵乘法学习项目，通过 9 个递进式算子实现，展示 GPU 编程的核心优化技术。
 
 ## 目录
 
@@ -49,8 +49,6 @@ C = alpha × A × B + beta × C
 | 6 | **Bank Conflict** | `sgemm_register_bank_conflict.cu` | Bank Conflict 消除 | ~35-55 TFLOPS |
 | 7 | **WMMA** | `sgemm_wmma.cu` | Tensor Core WMMA API | ~40-70 TFLOPS |
 | 8 | **WMMA V2** | `sgemm_wmma_v2.cu` | Tensor Core 优化版本 | ~45-75 TFLOPS |
-| 9 | **CUTLASS** | `sgemm_cutlass.cu` | NVIDIA CUTLASS 库封装 | 视配置而定 |
-| 10 | **CuTe** | `sgemm_cute.cu` | CuTe DSL 现代张量编程 | 视配置而定 |
 
 ### 关键优化技术详解
 
@@ -85,9 +83,7 @@ GEMM/
 │       ├── sgemm_register_v3.cu # 双缓冲优化
 │       ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除
 │       ├── sgemm_wmma.cu        # Tensor Core WMMA
-│       ├── sgemm_wmma_v2.cu     # Tensor Core 优化版
-│       ├── sgemm_cutlass.cu     # CUTLASS 封装（可选）
-│       └── sgemm_cute.cu        # CuTe 实现（可选）
+│       └── sgemm_wmma_v2.cu     # Tensor Core 优化版
 │
 ├── docs/                        # 技术文档
 │   ├── README.md                # 文档入口
@@ -169,17 +165,7 @@ SM 数量: 128, 核心频率: 2520 MHz
 ...
 ```
 
-### 4. 启用 CUTLASS/CuTe（可选）
-
-```bash
-# 克隆 CUTLASS 库
-git clone --depth 1 https://github.com/NVIDIA/cutlass.git third_party/cutlass
-
-# 重新编译
-make clean && make
-```
-
-### 5. 自定义矩阵尺寸
+### 4. 自定义矩阵尺寸
 
 编辑 `src/main.cu` 修改测试参数：
 
