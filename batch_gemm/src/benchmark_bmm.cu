@@ -2,8 +2,11 @@
 #include <vector>
 #include <random>
 #include <cmath>
+#include <string>
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
+
+#include "kernels.cuh"
 
 // 宏定义：用于检查 CUDA 运行时错误
 #define CUDA_CHECK(call) \
@@ -26,8 +29,6 @@
             exit(EXIT_FAILURE); \
         } \
     } while (0)
-
-#include "kernels.cuh"
 
 // ==============================================================================
 // 辅助函数：随机初始化矩阵
@@ -112,15 +113,14 @@ int main() {
     CUBLAS_CHECK(cublasCreate(&handle));
     float alpha = 1.0f, beta = 0.0f;
 
-    // 注意：cuBLAS 默认使用列优先(Column-Major)。
-    // 我们的矩阵是行优先(Row-Major)。
+    // 注意：cuBLAS 默认使用列优先(Column-Major)。我们的矩阵是行优先(Row-Major)。
     // 根据矩阵转置公式：C_row = A_row * B_row  ==>  C_col^T = B_col^T * A_col^T
     // 因此传给 cuBLAS 的参数顺序需要交换 A 和 B，并且维度也要对应调整。
     auto run_cublas = [&]() {
         CUBLAS_CHECK(cublasSgemmStridedBatched(
             handle,
             CUBLAS_OP_N, CUBLAS_OP_N,
-            N, M, K,                     // 注意：m=N, n=M
+            N, M, K,                     // m=N, n=M
             &alpha,
             d_B, N, K * N,               // A的位置传B, lda=N, stride=K*N
             d_A, K, M * K,               // B的位置传A, ldb=K, stride=M*K
@@ -147,6 +147,9 @@ int main() {
     double tflops_cublas = (total_flops / (avg_ms_cublas * 1e-3)) / 1e12;
     std::cout << "[cuBLAS]     Avg Time: " << avg_ms_cublas << " ms \t TFLOPS: " << tflops_cublas << std::endl;
 
+    // 🔥 极其重要的修复：将 cuBLAS 算出的标准答案从显存拷回内存，供后续比对 🔥
+    CUDA_CHECK(cudaMemcpy(h_C_ref.data(), d_C_ref, size_C * sizeof(float), cudaMemcpyDeviceToHost));
+
     // ==========================================================================
     // Benchmark 2: Custom Kernels (动态测试多个版本)
     // ==========================================================================
@@ -155,23 +158,20 @@ int main() {
         BmmKernelFunc func;
     };
 
-    // ==========================================================================
-    // 🚀 在这里注册你新写的所有 Kernel 版本！
-    // ==========================================================================
+    // 🚀 在这里注册你的所有 Kernel 版本！
     std::vector<KernelConfig> custom_kernels = {
         {"V0_Naive", run_bmm_naive},
         {"V1_SharedMem", run_bmm_v1_shared_memory},
-        // {"V2_RegTiling", run_bmm_v2_register_tiling},
+        // 未来可以在这里继续添加 {"V2_RegTiling", run_bmm_v2_register_tiling}
     };
 
     std::cout << "--------------------------------------------------------" << std::endl;
 
     for (const auto& kernel : custom_kernels) {
-        // 重要：每次测新 kernel 前将输出内存置零，防止被上一次成功的结果掩盖逻辑错误
+        // 重要：每次测新 kernel 前将输出显存置零，防止被上一次的结果污染
         CUDA_CHECK(cudaMemset(d_C_custom, 0, size_C * sizeof(float)));
 
         auto run_custom = [&]() {
-            // 统一调用对应的 Host 端包装函数
             kernel.func(d_A, d_B, d_C_custom, BATCH_SIZE, M, N, K);
         };
 
