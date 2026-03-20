@@ -18,22 +18,26 @@ CUTLASS_HEADER := $(CUTLASS_DIR)/include/cutlass/gemm/device/gemm.h
 ifeq ($(wildcard $(CUTLASS_HEADER)),)
   GEMM_HAVE_CUTLASS := 0
   CUTLASS_SRC := $(SRC_DIR)/sgemm_cutlass_disabled.cu
+  CUTE_SRC := $(SRC_DIR)/sgemm_cute_disabled.cu
   CUTLASS_NVCC_FLAGS := $(NVCC_FLAGS)
+  CUTE_NVCC_FLAGS := $(NVCC_FLAGS)
   $(info [GEMM] CUTLASS 未找到: $(CUTLASS_HEADER))
   $(info       克隆: git clone --depth 1 https://github.com/NVIDIA/cutlass.git third_party/cutlass)
-  $(info       说明见 docs/cutlass_build.md)
+  $(info       说明见 docs/cutlass_build.md 和 docs/cute_build.md)
 else
   GEMM_HAVE_CUTLASS := 1
   CUTLASS_SRC := $(SRC_DIR)/sgemm_cutlass.cu
-  # CUTLASS 需 C++17；避免与 NVCC_FLAGS 中 -std=c++14 重复
+  CUTE_SRC := $(SRC_DIR)/sgemm_cute.cu
+  # CUTLASS/CuTe 需 C++17；避免与 NVCC_FLAGS 中 -std=c++14 重复
   CUTLASS_NVCC_FLAGS := $(filter-out -std=c++14,$(NVCC_FLAGS)) -std=c++17 -I$(CUTLASS_DIR)/include --expt-relaxed-constexpr
+  CUTE_NVCC_FLAGS := $(filter-out -std=c++14,$(NVCC_FLAGS)) -std=c++17 -I$(CUTLASS_DIR)/include --expt-relaxed-constexpr
 endif
 
 # main.cu 需与是否启用 CUTLASS 一致
 MAIN_CPPFLAGS := -DGEMM_HAVE_CUTLASS=$(GEMM_HAVE_CUTLASS)
 
 # 需要编译的源文件对应的目标对象文件
-OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/sgemm_cublas.o $(SRC_DIR)/sgemm_naive.o $(SRC_DIR)/sgemm_shared.o $(SRC_DIR)/sgemm_register.o $(SRC_DIR)/sgemm_register_v2.o $(SRC_DIR)/sgemm_register_v3.o $(SRC_DIR)/sgemm_register_bank_conflict.o $(SRC_DIR)/sgemm_wmma.o $(SRC_DIR)/sgemm_wmma_v2.o $(SRC_DIR)/sgemm_cutlass.o
+OBJS = $(SRC_DIR)/main.o $(SRC_DIR)/sgemm_cublas.o $(SRC_DIR)/sgemm_naive.o $(SRC_DIR)/sgemm_shared.o $(SRC_DIR)/sgemm_register.o $(SRC_DIR)/sgemm_register_v2.o $(SRC_DIR)/sgemm_register_v3.o $(SRC_DIR)/sgemm_register_bank_conflict.o $(SRC_DIR)/sgemm_wmma.o $(SRC_DIR)/sgemm_wmma_v2.o $(SRC_DIR)/sgemm_cutlass.o $(SRC_DIR)/sgemm_cute.o
 
 # 默认构建目标: 先清理，再编译
 all: clean $(TARGET)
@@ -85,6 +89,10 @@ $(SRC_DIR)/sgemm_wmma_v2.o: $(SRC_DIR)/sgemm_wmma_v2.cu $(SRC_DIR)/common.h $(SR
 # CUTLASS SGEMM（或占位实现）
 $(SRC_DIR)/sgemm_cutlass.o: $(CUTLASS_SRC) $(SRC_DIR)/common.h $(SRC_DIR)/gemm_kernels.h
 	$(NVCC) $(CUTLASS_NVCC_FLAGS) -c $(CUTLASS_SRC) -o $(SRC_DIR)/sgemm_cutlass.o
+
+# CuTe SGEMM（或占位实现）
+$(SRC_DIR)/sgemm_cute.o: $(CUTE_SRC) $(SRC_DIR)/common.h $(SRC_DIR)/gemm_kernels.h
+	$(NVCC) $(CUTE_NVCC_FLAGS) -c $(CUTE_SRC) -o $(SRC_DIR)/sgemm_cute.o
 
 # 清理编译产物
 clean:

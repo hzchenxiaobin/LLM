@@ -30,6 +30,8 @@ C = alpha × A × B + beta × C
 | **Register V3** | `src/sgemm_register_v3.cu` | 双缓冲 (Double Buffering) | ~40-60 TFLOPS |
 | **Register Bank Conflict** | `src/sgemm_register_bank_conflict.cu` | Shared Memory Padding 消除 Bank Conflict | ~35-55 TFLOPS |
 | **CUTLASS SGEMM** | `src/sgemm_cutlass.cu` | NVIDIA CUTLASS 设备级 GEMM（需本地 CUTLASS 头文件） | 视配置与 GPU 而定 |
+| **CuTe SGEMM** | `src/sgemm_cute.cu` | CuTe (CUTLASS 3.x DSL) 现代张量编程实现 | 视配置与 GPU 而定 |
+| **Triton SGEMM** | `triton_kernels/sgemm_triton.py` | OpenAI Triton Python DSL 实现 | ~cuBLAS 80-95% |
 
 ### 硬件要求
 
@@ -55,7 +57,8 @@ GEMM/
 │   ├── sgemm_register_v3.cu     # 双缓冲优化版 (Double Buffering)
 │   ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除优化
 │   ├── sgemm_wmma.cu / sgemm_wmma_v2.cu # Tensor Core WMMA
-│   ├── sgemm_cutlass.cu         # CUTLASS SGEMM（可选，见 docs/cutlass_build.md）
+│   ├── sgemm_cutlass.cu         # CUTLASS SGEMM（见 docs/cutlass_tutorial.md）
+│   ├── sgemm_cute.cu            # CuTe SGEMM（可选，见 docs/cute_build.md）
 │   └── sgemm_cublas.cu          # cuBLAS 参考实现
 │
 ├── docs/                        # 技术文档目录
@@ -68,12 +71,19 @@ GEMM/
 │   ├── bank_conflict_analysis.md         # Bank Conflict 深度解析（RTX 5090 视角）
 │   ├── rtx5090_hardware_constraints.md   # RTX 5090 硬件约束分析
 │   ├── cuda_thread_hierarchy.md          # CUDA 线程层次说明
-│   └── cutlass_build.md                  # CUTLASS 依赖与编译说明
+│   ├── cutlass_build.md                  # CUTLASS 依赖与编译说明
+│   ├── cutlass_tutorial.md               # CUTLASS 完整教程（推荐入门）
+│   ├── cute_build.md                     # CuTe (CUTLASS 3.x DSL) 依赖与编译说明
+│   └── triton_build.md                   # Triton Python DSL 使用说明
 │
 ├── images/                      # 图片目录
 │   ├── roofline_plot.png               # Roofline 图
 │   ├── shared_gemm_*.png               # Shared Kernel 图解
 │   └── register_*.png                  # Register Kernel 图解
+│
+├── triton_kernels/              # Triton Python DSL 实现
+│   ├── sgemm_triton.py           # Triton SGEMM kernel
+│   └── benchmark_triton.py       # Triton 性能基准测试
 │
 ├── scripts/                     # 辅助脚本
 │   ├── generate_roofline.py            # 生成 Roofline 图

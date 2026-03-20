@@ -234,6 +234,9 @@ __global__ void wmma_gemm(half *A, half *B, float *C, int M, int N, int K) {
 | [rtx5090_hardware_constraints.md](rtx5090_hardware_constraints.md) | RTX 5090 硬件约束分析 |
 | [sgemm_shared_kernel_explained.md](sgemm_shared_kernel_explained.md) | Shared Memory Kernel 详解 |
 | [cutlass_build.md](cutlass_build.md) | CUTLASS SGEMM 编译与依赖说明 |
+| **[cutlass_tutorial.md](cutlass_tutorial.md)** | **CUTLASS 完整教程（推荐入门）** |
+| [cute_build.md](cute_build.md) | CuTe (CUTLASS 3.x DSL) SGEMM 编译与使用说明 |
+| [triton_build.md](triton_build.md) | Triton Python DSL SGEMM 使用说明 |
 
 ### 编译与测试
 

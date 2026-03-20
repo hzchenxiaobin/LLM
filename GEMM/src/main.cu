@@ -180,6 +180,9 @@ int main() {
 #if GEMM_HAVE_CUTLASS
     // 0.5 CUTLASS SGEMM (Row-Major，与手写 kernel 布局一致)
     benchmark_gemm("CUTLASS SGEMM (Row-Major)", run_sgemm_cutlass, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
+    // 0.6 CuTe SGEMM (CuTe DSL 实现)
+    benchmark_gemm("CuTe SGEMM (Row-Major)", run_sgemm_cute, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 #endif
 
     // 1. Naive 版本
