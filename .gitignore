@@ -4,6 +4,7 @@
 *.out
 *.exe
 benchmark_gemm
+batch_gemm/src/benchmark
 
 # CUDA 相关
 *.ptx

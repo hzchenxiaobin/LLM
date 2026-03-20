@@ -80,7 +80,8 @@ sA[load_a_row][load_a_col + 2] = vec_a.z;
 sA[load_a_row][load_a_col + 3] = vec_a.w;
 
 优势：
-- 1 条 128-bit 加载指令替代 4 条 32-bit 指令
+- 1 条 128-bit 加
+载指令替代 4 条 32-bit 指令
 - 内存访问连续，最大化缓存行利用率
 - 带宽利用率从 ~25% 提升到 ~80-90%
 ```
