@@ -2,7 +2,7 @@
 
 本项目是一个用于学习和实践 CUDA 矩阵乘法（SGEMM）优化的教程代码库，从朴素实现逐步优化到高性能实现，展示了 GPU 编程的核心优化技术。
 
-## 📋 项目简介
+## 项目简介
 
 ### 什么是 SGEMM？
 
@@ -22,24 +22,25 @@ C = alpha × A × B + beta × C
 
 | 算子 | 文件 | 优化技术 | 预期性能 |
 |------|------|---------|---------|
-| **cuBLAS** | `src/sgemm_cublas.cu` | NVIDIA 官方高度优化库 | 60+ TFLOPS |
-| **Naive** | `src/sgemm_naive.cu` | 无优化，直接实现 | ~7 TFLOPS |
-| **Shared Memory** | `src/sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
-| **Register** | `src/sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
-| **Register V2** | `src/sgemm_register_v2.cu` | 向量化加载 + Padding 优化 | ~35-55 TFLOPS |
-| **Register V3** | `src/sgemm_register_v3.cu` | 双缓冲 (Double Buffering) | ~40-60 TFLOPS |
-| **Register Bank Conflict** | `src/sgemm_register_bank_conflict.cu` | Shared Memory Padding 消除 Bank Conflict | ~35-55 TFLOPS |
-| **CUTLASS SGEMM** | `src/sgemm_cutlass.cu` | NVIDIA CUTLASS 设备级 GEMM（需本地 CUTLASS 头文件） | 视配置与 GPU 而定 |
-| **CuTe SGEMM** | `src/sgemm_cute.cu` | CuTe (CUTLASS 3.x DSL) 现代张量编程实现 | 视配置与 GPU 而定 |
-| **Triton SGEMM** | `triton_kernels/sgemm_triton.py` | OpenAI Triton Python DSL 实现 | ~cuBLAS 80-95% |
+| **cuBLAS** | `src/gemm/sgemm_cublas.cu` | NVIDIA 官方高度优化库 | 60+ TFLOPS |
+| **Naive** | `src/gemm/sgemm_naive.cu` | 无优化，直接实现 | ~7 TFLOPS |
+| **Shared Memory** | `src/gemm/sgemm_shared.cu` | 共享内存分块 (Tiling) | ~9 TFLOPS |
+| **Register** | `src/gemm/sgemm_register.cu` | 寄存器分块 + 双层 Tiling | ~30-50 TFLOPS |
+| **Register V2** | `src/gemm/sgemm_register_v2.cu` | 向量化加载 + Padding 优化 | ~35-55 TFLOPS |
+| **Register V3** | `src/gemm/sgemm_register_v3.cu` | 双缓冲 (Double Buffering) | ~40-60 TFLOPS |
+| **Register Bank Conflict** | `src/gemm/sgemm_register_bank_conflict.cu` | Shared Memory Padding 消除 Bank Conflict | ~35-55 TFLOPS |
+| **WMMA** | `src/gemm/sgemm_wmma.cu` | Tensor Core WMMA API | ~40-70 TFLOPS |
+| **WMMA V2** | `src/gemm/sgemm_wmma_v2.cu` | Tensor Core 优化版本 | ~45-75 TFLOPS |
+| **CUTLASS SGEMM** | `src/gemm/sgemm_cutlass.cu` | NVIDIA CUTLASS 设备级 GEMM（需本地 CUTLASS 头文件）| 视配置与 GPU 而定 |
+| **CuTe SGEMM** | `src/gemm/sgemm_cute.cu` | CuTe (CUTLASS 3.x DSL) 现代张量编程实现 | 视配置与 GPU 而定 |
 
 ### 硬件要求
 
 - NVIDIA GPU（支持 CUDA，推荐 Compute Capability 7.0+）
 - CUDA Toolkit 11.0+
-- 测试通过硬件：RTX 4090 / RTX 5090
+- 测试通过硬件：RTX 3060 / RTX 4090
 
-## 📁 项目结构
+## 项目结构
 
 ```
 GEMM/
@@ -49,41 +50,38 @@ GEMM/
 ├── src/                         # 源代码目录
 │   ├── main.cu                  # 测试框架主程序
 │   ├── common.h                 # 公共头文件（CUDA 错误检查宏）
-│   ├── gemm_kernels.h           # Kernel 函数声明
-│   ├── sgemm_naive.cu           # 朴素实现
-│   ├── sgemm_shared.cu          # 共享内存优化实现
-│   ├── sgemm_register.cu        # 寄存器分块优化实现
-│   ├── sgemm_register_v2.cu     # 优化版寄存器分块 (向量化 + Padding)
-│   ├── sgemm_register_v3.cu     # 双缓冲优化版 (Double Buffering)
-│   ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除优化
-│   ├── sgemm_wmma.cu / sgemm_wmma_v2.cu # Tensor Core WMMA
-│   ├── sgemm_cutlass.cu         # CUTLASS SGEMM（见 docs/cutlass_tutorial.md）
-│   ├── sgemm_cute.cu            # CuTe SGEMM（可选，见 docs/cute_build.md）
-│   └── sgemm_cublas.cu          # cuBLAS 参考实现
+│   ├── gemm_kernels.h           # 统一头文件入口
+│   └── gemm/                    # 单矩阵 GEMM 实现目录
+│       ├── gemm_kernels.h       # Kernel 函数声明
+│       ├── sgemm_naive.cu       # 朴素实现
+│       ├── sgemm_shared.cu      # 共享内存优化实现
+│       ├── sgemm_register.cu    # 寄存器分块优化实现
+│       ├── sgemm_register_v2.cu # 优化版寄存器分块 (向量化 + Padding)
+│       ├── sgemm_register_v3.cu # 双缓冲优化版 (Double Buffering)
+│       ├── sgemm_register_bank_conflict.cu  # Bank Conflict 消除优化
+│       ├── sgemm_wmma.cu        # Tensor Core WMMA 实现
+│       ├── sgemm_wmma_v2.cu     # Tensor Core WMMA 优化版
+│       ├── sgemm_cutlass.cu     # CUTLASS SGEMM（可选）
+│       ├── sgemm_cute.cu        # CuTe SGEMM（可选）
+│       └── sgemm_cublas.cu      # cuBLAS 参考实现
 │
 ├── docs/                        # 技术文档目录
-│   ├── README.md                        # 项目文档入口（优化技术详解）
+│   ├── README.md                        # 项目文档入口
 │   ├── roofline_analysis.md             # Roofline 模型性能分析
 │   ├── sgemm_shared_kernel_explained.md # Shared Kernel 详解
 │   ├── sgemm_register_analysis.md        # Register Kernel 性能对比
 │   ├── sgemm_register_code_explanation.md # Register Kernel 逐行解读
 │   ├── sgemm_register_v2_optimization.md # V2 向量化优化详解
-│   ├── bank_conflict_analysis.md         # Bank Conflict 深度解析（RTX 5090 视角）
+│   ├── bank_conflict_analysis.md         # Bank Conflict 深度解析
 │   ├── rtx5090_hardware_constraints.md   # RTX 5090 硬件约束分析
 │   ├── cuda_thread_hierarchy.md          # CUDA 线程层次说明
 │   ├── cutlass_build.md                  # CUTLASS 依赖与编译说明
-│   ├── cutlass_tutorial.md               # CUTLASS 完整教程（推荐入门）
-│   ├── cute_build.md                     # CuTe (CUTLASS 3.x DSL) 依赖与编译说明
-│   └── triton_build.md                   # Triton Python DSL 使用说明
+│   └── cute_build.md                     # CuTe 依赖与编译说明
 │
 ├── images/                      # 图片目录
 │   ├── roofline_plot.png               # Roofline 图
 │   ├── shared_gemm_*.png               # Shared Kernel 图解
 │   └── register_*.png                  # Register Kernel 图解
-│
-├── triton_kernels/              # Triton Python DSL 实现
-│   ├── sgemm_triton.py           # Triton SGEMM kernel
-│   └── benchmark_triton.py       # Triton 性能基准测试
 │
 ├── scripts/                     # 辅助脚本
 │   ├── generate_roofline.py            # 生成 Roofline 图
@@ -93,7 +91,7 @@ GEMM/
     └── occupancy_calculation_exercises.md  # Occupancy 计算练习题
 ```
 
-## 🚀 快速开始
+## 快速开始
 
 ### 1. 环境准备
 
@@ -115,26 +113,13 @@ nvidia-smi
 ### 2. 编译项目
 
 ```bash
-# 克隆/进入项目目录
+# 进入项目目录
 cd GEMM
 
 # 编译所有算子
 make
 
 # 编译完成后生成可执行文件：benchmark_gemm
-```
-
-编译输出：
-```
-nvcc -O3 -c src/main.cu -o src/main.o
-nvcc -O3 -c src/sgemm_cublas.cu -o src/sgemm_cublas.o
-nvcc -O3 -c src/sgemm_naive.cu -o src/sgemm_naive.o
-nvcc -O3 -c src/sgemm_shared.cu -o src/sgemm_shared.o
-nvcc -O3 -c src/sgemm_register.cu -o src/sgemm_register.o
-nvcc -O3 -c src/sgemm_register_v2.cu -o src/sgemm_register_v2.o
-nvcc -O3 -c src/sgemm_register_v3.cu -o src/sgemm_register_v3.o
-nvcc -O3 -c src/sgemm_register_bank_conflict.cu -o src/sgemm_register_bank_conflict.o
-nvcc -O3 src/main.o src/sgemm_cublas.o sgemm_naive.o src/sgemm_shared.o src/sgemm_register.o src/sgemm_register_v2.o src/sgemm_register_v3.o src/sgemm_register_bank_conflict.o -o benchmark_gemm -lcublas
 ```
 
 ### 3. 运行测试
@@ -146,64 +131,51 @@ nvcc -O3 src/main.o src/sgemm_cublas.o sgemm_naive.o src/sgemm_shared.o src/sgem
 
 预期输出：
 ```
-Starting GEMM Benchmark...
-Matrix Size: M=4096, N=4096, K=4096
+========================================================
+检测到显卡设备: NVIDIA GeForce RTX 4090 (Compute 8.9)
+SM 数量: 128, 核心频率: 2520 MHz
+理论 FP32 CUDA Core 峰值算力: 82.58 TFLOPs
+========================================================
+
+开始 GEMM 性能基准测试...
+矩阵尺寸: M=4096, N=4096, K=4096
 --------------------------------------------------------
-Running: cuBLAS SGEMM (Reference / Upper Bound)
-  [Performance] Avg Time: 2.061 ms
-  [Performance] Throughput: 66.687 TFLOPs
---------------------------------------------------------
-Running: SGEMM_Naive
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: 18.380 ms
-  [Performance] Throughput: 7.477 TFLOPs
---------------------------------------------------------
-Running: SGEMM_SharedMemory
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: 15.051 ms
-  [Performance] Throughput: 9.132 TFLOPs
---------------------------------------------------------
-Running: SGEMM_Register
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: XX.XXX ms
-  [Performance] Throughput: XX.XXX TFLOPs
---------------------------------------------------------
-Running: SGEMM_RegisterTiling_V2
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: XX.XXX ms
-  [Performance] Throughput: XX.XXX TFLOPs
---------------------------------------------------------
-Running: SGEMM_RegisterTiling_V3
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: XX.XXX ms
-  [Performance] Throughput: XX.XXX TFLOPs
---------------------------------------------------------
-Running: SGEMM_RegisterTiling_BankConflict
-  [Correctness] Pass! (Max error: 0.000)
-  [Performance] Avg Time: XX.XXX ms
-  [Performance] Throughput: XX.XXX TFLOPs
---------------------------------------------------------
+正在运行: cuBLAS SGEMM (Reference / Upper Bound)
+  [正确性检查] 跳过 (作为标准参考答案).
+  [性能统计] 平均耗时: 2.345 ms
+  [算力吞吐] 实际算力: 58.500 TFLOPs (达理论峰值的 70.83%)
+...
 ```
 
-### 4. 清理编译产物
+### 4. 可选：启用 CUTLASS 支持
+
+如需测试 CUTLASS/CuTe 实现，先克隆 CUTLASS：
+
+```bash
+git clone --depth 1 https://github.com/NVIDIA/cutlass.git third_party/cutlass
+make clean && make
+```
+
+### 5. 清理编译产物
 
 ```bash
 make clean
 ```
 
-## 📊 性能对比
+## 性能对比
 
-在 RTX 5090 (104.9 TFLOPS 峰值) 上的测试结果：
+在 RTX 4090 (82.58 TFLOPS 理论峰值) 上的典型测试结果：
 
 | 算子 | 性能 (TFLOPS) | 利用率 | vs Naive | vs cuBLAS |
 |------|---------------|--------|----------|-----------|
-| **cuBLAS** | 66.7 | 63.6% | 8.9× | 100% |
-| **Register V3** | 40-60 (预估) | 38-57% | 5.3-8× | 60-90% |
-| **Register V2** | 35-55 (预估) | 35-55% | 5-7× | 50-80% |
-| **Register Bank Conflict** | 35-55 (预估) | 35-55% | 5-7× | 50-80% |
-| **Register** | 30-50 (预估) | 30-50% | 4-6× | 45-75% |
-| **Shared** | 9.1 | 8.7% | 1.2× | 13.7% |
-| **Naive** | 7.5 | 7.1% | 1× | 11.2% |
+| **cuBLAS** | 58-65 | 70-79% | 8-9× | 100% |
+| **WMMA V2** | 45-55 | 55-67% | 6-7× | 78-85% |
+| **Register V3** | 40-50 | 48-61% | 5-6× | 69-77% |
+| **Register V2** | 35-45 | 42-55% | 4-5× | 60-69% |
+| **Register Bank Conflict** | 35-45 | 42-55% | 4-5× | 60-69% |
+| **Register** | 30-40 | 36-48% | 4-5× | 52-62% |
+| **Shared** | 9-10 | 11-12% | 1.3× | 15-17% |
+| **Naive** | 7-8 | 8-10% | 1× | 12-14% |
 
 ### 关键优化技术对比
 
@@ -215,8 +187,9 @@ make clean
 | **向量化加载 (float4)** | 提高带宽利用率 | 128-bit 协作加载 |
 | **Shared Memory Padding** | 消除 Bank Conflict | 无冲突访存 |
 | **双缓冲 (Double Buffering)** | 隐藏数据加载延迟 | 计算与访存重叠 |
+| **Tensor Core WMMA** | 利用专用矩阵计算单元 | FP16/FP32 混合精度加速 |
 
-## 📖 学习路径
+## 学习路径
 
 建议按以下顺序学习：
 
@@ -226,11 +199,11 @@ make clean
 - 理解 SM (Streaming Multiprocessor) 架构
 
 ### 阶段 2: 朴素实现
-- 阅读 `src/sgemm_naive.cu` 了解最基础的矩阵乘法实现
+- 阅读 `src/gemm/sgemm_naive.cu` 了解最基础的矩阵乘法实现
 - 理解为什么性能低（频繁全局内存访问）
 
 ### 阶段 3: 共享内存优化
-- 阅读 `src/sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
+- 阅读 `src/gemm/sgemm_shared.cu` 和 `docs/sgemm_shared_kernel_explained.md`
 - 理解 Shared Memory Tiling 原理
 - 查看 `images/shared_gemm_*.png` 图解
 
@@ -240,30 +213,35 @@ make clean
 - 理解 Arithmetic Intensity 概念
 
 ### 阶段 5: 寄存器优化
-- 阅读 `src/sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
+- 阅读 `src/gemm/sgemm_register.cu` 和 `docs/sgemm_register_code_explanation.md`
 - 理解双层分块策略
 - 查看 `images/register_*.png` 图解
 - 阅读 `docs/sgemm_register_analysis.md` 了解性能对比
 
 ### 阶段 5.5: 进阶优化技巧
-- 阅读 `src/sgemm_register_v2.cu` 了解向量化优化
+- 阅读 `src/gemm/sgemm_register_v2.cu` 了解向量化优化
 - 学习 **float4 向量化加载**：128-bit 协作访存，提高带宽利用率
 - 学习 **Shared Memory Padding**：通过 +1 Padding 消除 Bank Conflict
-- 阅读 `src/sgemm_register_bank_conflict.cu` 和 `docs/bank_conflict_analysis.md`
+- 阅读 `src/gemm/sgemm_register_bank_conflict.cu` 和 `docs/bank_conflict_analysis.md`
 - 理解 Bank Conflict 的硬件原理：`bank = (address / 4) % 32`
-- 对比 V1 和 Bank Conflict 版本，理解微架构优化的重要性
 
 ### 阶段 5.6: 双缓冲优化
-- 阅读 `src/sgemm_register_v3.cu` 了解双缓冲实现
+- 阅读 `src/gemm/sgemm_register_v3.cu` 了解双缓冲实现
 - 学习 **Double Buffering**：通过两组共享内存实现计算与访存重叠
 - 理解软件流水线技术，最大化 GPU 利用率
 
-### 阶段 6: 硬件深入
+### 阶段 6: Tensor Core
+- 阅读 `src/gemm/sgemm_wmma.cu` 和 `src/gemm/sgemm_wmma_v2.cu`
+- 学习 WMMA API 使用
+- 理解 FP16 输入 + FP32 累加的混合精度计算
+- 对比 CUDA Core 和 Tensor Core 的性能差异
+
+### 阶段 7: 硬件深入
 - 阅读 `docs/rtx5090_hardware_constraints.md`
-- 理解寄存器限制、共享内存限制、Bank Conflict
+- 理解寄存器限制、共享内存限制、Warp 调度
 - 完成 `exercises/occupancy_calculation_exercises.md` 练习题
 
-## 🔧 高级功能
+## 高级功能
 
 ### 生成可视化图表
 
@@ -282,9 +260,9 @@ python3 scripts/visualize_shared_gemm.py
 编辑 `src/main.cu` 中的矩阵大小参数：
 
 ```cpp
-const int M = 4096;  // 修改为你需要的大小
-const int N = 4096;
-const int K = 4096;
+int M = 4096;  // 修改为你需要的大小
+int N = 4096;
+int K = 4096;
 ```
 
 重新编译运行：
@@ -292,7 +270,7 @@ const int K = 4096;
 make clean && make && ./benchmark_gemm
 ```
 
-## 🎯 练习题
+## 练习题
 
 项目包含一套完整的 Occupancy 计算练习题，帮助你深入理解 GPU 资源限制：
 
@@ -312,31 +290,7 @@ less exercises/occupancy_calculation_exercises.md
 - 识别性能瓶颈
 - 设计合理的 kernel 配置
 
-## 📝 文档规范
-
-### 目录结构
-- `src/`：源代码文件（.cu, .h）
-- `docs/`：技术文档（性能分析、代码解读、硬件约束）
-- `exercises/`：练习题和计算练习
-- `images/`：可视化图表（Roofline 图、执行流程图）
-- `scripts/`：辅助脚本（图表生成）
-
-### 文件命名规范
-- `sgemm_<优化策略>.cu`：SGEMM 实现文件
-- `<主题>_analysis.md`：性能分析文档
-- `<主题>_explanation.md`：代码解读文档
-- `<主题>_exercises.md`：练习题文档
-
-### 宏定义规范
-```cpp
-#define BM 128  // Block M 维度大小 (Block M)
-#define BN 128  // Block N 维度大小 (Block N)
-#define BK 8    // Block K 维度步长 (Block K)
-#define TM 8    // Thread M 维度负责大小 (Thread M)
-#define TN 8    // Thread N 维度负责大小 (Thread N)
-```
-
-## 🐛 常见问题
+## 常见问题
 
 ### Q: 编译失败，找不到 `nvcc`
 ```bash
@@ -356,15 +310,15 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 - 确保 GPU 未被其他进程占用
 - 矩阵大小建议 ≥ 2048 才能发挥 GPU 并行性
 
-## 📚 参考资料
+## 参考资料
 
 - [CUDA C Programming Guide](https://docs.nvidia.com/cuda/cuda-c-programming-guide/)
 - [CUDA Best Practices Guide](https://docs.nvidia.com/cuda/cuda-c-best-practices-guide/)
 - [CUTLASS](https://github.com/NVIDIA/cutlass) - NVIDIA 官方高效 GEMM 实现
 - [Roofline Model Paper](https://people.eecs.berkeley.edu/~kubitron/cs252/handouts/papers/roofline.pdf)
-- [NVIDIA A100/RTX 架构白皮书](https://www.nvidia.com/en-us/data-center/a100/)
+- [NVIDIA Ampere 架构白皮书](https://www.nvidia.com/en-us/data-center/ampere-architecture/)
 
-## 📊 文档索引
+## 文档索引
 
 ### 分析文档
 | 文档 | 内容 |
@@ -372,7 +326,7 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 | `docs/roofline_analysis.md` | Roofline 模型与 Arithmetic Intensity 分析 |
 | `docs/sgemm_register_analysis.md` | Register vs Shared Kernel 性能对比 |
 | `docs/rtx5090_hardware_constraints.md` | RTX 5090 硬件约束详解 |
-| `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析（RTX 5090 硬件视角）|
+| `docs/bank_conflict_analysis.md` | Bank Conflict 深度解析 |
 
 ### 代码解读
 | 文档 | 内容 |
@@ -381,31 +335,27 @@ export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 | `docs/sgemm_register_code_explanation.md` | Register Kernel 逐行解读 |
 | `docs/sgemm_register_v2_optimization.md` | V2 向量化优化详解 |
 | `docs/cuda_thread_hierarchy.md` | CUDA 线程层次与 SM 架构 |
-| `docs/README.md` | 优化技术完整教程（从 Naive 到 Tensor Cores）|
 
 ### 练习题
 | 文档 | 内容 |
 |------|------|
 | `exercises/occupancy_calculation_exercises.md` | 8 道 Occupancy 计算练习题 |
 
-## 🤝 贡献
+## 贡献
 
 欢迎提交 Issue 和 PR！
 
 可能的改进方向：
-- ✅ ~~添加更多优化策略（Warp Tiling、Double Buffering、Tensor Core）~~ - 已完成 Double Buffering
-- ✅ ~~添加 Bank Conflict 优化版本~~ - 已完成
 - 支持更多数据类型（FP16、BF16）
 - 添加性能 profiling 工具支持（Nsight Compute）
 - 多 GPU 支持
-- 添加 Tensor Core (WMMA) 实现
 - 更多练习题（Warp Divergence、Coalesced Access）
 
-## 📄 许可证
+## 许可证
 
 MIT License - 自由使用和学习
 
 ---
 
-**作者**: CUDA GEMM 学习项目
+**作者**: CUDA GEMM 学习项目  
 **创建时间**: 2026年3月

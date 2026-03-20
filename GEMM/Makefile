@@ -8,11 +8,9 @@ LIBS = -lcublas
 # 源代码目录
 SRC_DIR = src
 GEMM_DIR = $(SRC_DIR)/gemm
-BATCH_GEMM_DIR = $(SRC_DIR)/batch_gemm
 
 # 目标可执行文件名称
 TARGET = benchmark_gemm
-BATCH_TARGET = benchmark_batch_gemm
 
 # CUTLASS：默认 third_party/cutlass，可通过环境变量 CUTLASS_DIR 覆盖
 CUTLASS_DIR ?= $(abspath $(CURDIR)/third_party/cutlass)
@@ -20,39 +18,36 @@ CUTLASS_HEADER := $(CUTLASS_DIR)/include/cutlass/gemm/device/gemm.h
 
 ifeq ($(wildcard $(CUTLASS_HEADER)),)
   GEMM_HAVE_CUTLASS := 0
-  CUTLASS_SRC := $(GEMM_DIR)/sgemm_cutlass_disabled.cu
-  CUTE_SRC := $(GEMM_DIR)/sgemm_cute_disabled.cu
-  CUTLASS_NVCC_FLAGS := $(NVCC_FLAGS)
-  CUTE_NVCC_FLAGS := $(NVCC_FLAGS)
   $(info [GEMM] CUTLASS 未找到: $(CUTLASS_HEADER))
   $(info       克隆: git clone --depth 1 https://github.com/NVIDIA/cutlass.git third_party/cutlass)
   $(info       说明见 docs/cutlass_build.md 和 docs/cute_build.md)
 else
   GEMM_HAVE_CUTLASS := 1
-  CUTLASS_SRC := $(GEMM_DIR)/sgemm_cutlass.cu
-  CUTE_SRC := $(GEMM_DIR)/sgemm_cute.cu
-  # CUTLASS/CuTe 需 C++17；避免与 NVCC_FLAGS 中 -std=c++14 重复
-  CUTLASS_NVCC_FLAGS := $(filter-out -std=c++14,$(NVCC_FLAGS)) -std=c++17 -I$(CUTLASS_DIR)/include --expt-relaxed-constexpr
-  CUTE_NVCC_FLAGS := $(filter-out -std=c++14,$(NVCC_FLAGS)) -std=c++17 -I$(CUTLASS_DIR)/include --expt-relaxed-constexpr
+  $(info [GEMM] CUTLASS 已找到: $(CUTLASS_HEADER))
 endif
 
 # main.cu 需与是否启用 CUTLASS 一致
 MAIN_CPPFLAGS := -DGEMM_HAVE_CUTLASS=$(GEMM_HAVE_CUTLASS)
 
-# GEMM 目标对象文件 (单矩阵)
-GEMM_OBJS = $(GEMM_DIR)/sgemm_cublas.o $(GEMM_DIR)/sgemm_naive.o $(GEMM_DIR)/sgemm_shared.o \
-            $(GEMM_DIR)/sgemm_register.o $(GEMM_DIR)/sgemm_register_v2.o $(GEMM_DIR)/sgemm_register_v3.o \
-            $(GEMM_DIR)/sgemm_register_bank_conflict.o $(GEMM_DIR)/sgemm_wmma.o $(GEMM_DIR)/sgemm_wmma_v2.o \
-            $(GEMM_DIR)/sgemm_cutlass.o $(GEMM_DIR)/sgemm_cute.o
+# 基础 GEMM 目标对象文件
+BASE_GEMM_OBJS = $(GEMM_DIR)/sgemm_cublas.o $(GEMM_DIR)/sgemm_naive.o $(GEMM_DIR)/sgemm_shared.o \
+                 $(GEMM_DIR)/sgemm_register.o $(GEMM_DIR)/sgemm_register_v2.o $(GEMM_DIR)/sgemm_register_v3.o \
+                 $(GEMM_DIR)/sgemm_register_bank_conflict.o $(GEMM_DIR)/sgemm_wmma.o $(GEMM_DIR)/sgemm_wmma_v2.o
 
-# Batch GEMM 目标对象文件
-BATCH_GEMM_OBJS = $(BATCH_GEMM_DIR)/sgemm_batch_naive.o
+# 条件添加 CUTLASS/CuTe 对象文件
+ifeq ($(GEMM_HAVE_CUTLASS),1)
+  GEMM_OBJS = $(BASE_GEMM_OBJS) $(GEMM_DIR)/sgemm_cutlass.o $(GEMM_DIR)/sgemm_cute.o
+  # CUTLASS/CuTe 需 C++17；避免与 NVCC_FLAGS 中 -std=c++14 重复
+  CUTLASS_NVCC_FLAGS := $(filter-out -std=c++14,$(NVCC_FLAGS)) -std=c++17 -I$(CUTLASS_DIR)/include --expt-relaxed-constexpr
+else
+  GEMM_OBJS = $(BASE_GEMM_OBJS)
+endif
 
 # 主程序对象文件
 MAIN_OBJ = $(SRC_DIR)/main.o
 
 # 所有对象文件
-ALL_OBJS = $(MAIN_OBJ) $(GEMM_OBJS) $(BATCH_GEMM_OBJS)
+ALL_OBJS = $(MAIN_OBJ) $(GEMM_OBJS)
 
 # 默认构建目标: 先清理，再编译单矩阵 GEMM
 all: clean $(TARGET)
@@ -60,10 +55,6 @@ all: clean $(TARGET)
 # 链接生成单矩阵 GEMM 可执行文件
 $(TARGET): $(MAIN_OBJ) $(GEMM_OBJS)
 	$(NVCC) $(NVCC_FLAGS) $(MAIN_OBJ) $(GEMM_OBJS) -o $(TARGET) $(LIBS)
-
-# 链接生成 Batch GEMM 可执行文件
-$(BATCH_TARGET): $(BATCH_GEMM_OBJS)
-	$(NVCC) $(NVCC_FLAGS) $(BATCH_GEMM_OBJS) -o $(BATCH_TARGET) $(LIBS)
 
 # ==========================================
 # 编译主函数文件
@@ -111,22 +102,16 @@ $(GEMM_DIR)/sgemm_wmma.o: $(GEMM_DIR)/sgemm_wmma.cu $(SRC_DIR)/common.h $(GEMM_D
 $(GEMM_DIR)/sgemm_wmma_v2.o: $(GEMM_DIR)/sgemm_wmma_v2.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
 	$(NVCC) $(NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_wmma_v2.cu -o $(GEMM_DIR)/sgemm_wmma_v2.o
 
-# CUTLASS SGEMM（或占位实现）
-$(GEMM_DIR)/sgemm_cutlass.o: $(CUTLASS_SRC) $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
-	$(NVCC) $(CUTLASS_NVCC_FLAGS) -c $(CUTLASS_SRC) -o $(GEMM_DIR)/sgemm_cutlass.o
+# CUTLASS SGEMM（仅在 CUTLASS 存在时编译）
+ifeq ($(GEMM_HAVE_CUTLASS),1)
+$(GEMM_DIR)/sgemm_cutlass.o: $(GEMM_DIR)/sgemm_cutlass.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
+	$(NVCC) $(CUTLASS_NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_cutlass.cu -o $(GEMM_DIR)/sgemm_cutlass.o
 
-# CuTe SGEMM（或占位实现）
-$(GEMM_DIR)/sgemm_cute.o: $(CUTE_SRC) $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
-	$(NVCC) $(CUTE_NVCC_FLAGS) -c $(CUTE_SRC) -o $(GEMM_DIR)/sgemm_cute.o
-
-# ==========================================
-# 编译 Batch GEMM 算子文件
-# ==========================================
-
-# 编译朴素 Batch GEMM 文件
-$(BATCH_GEMM_DIR)/sgemm_batch_naive.o: $(BATCH_GEMM_DIR)/sgemm_batch_naive.cu $(SRC_DIR)/common.h $(BATCH_GEMM_DIR)/batch_gemm_kernels.h
-	$(NVCC) $(NVCC_FLAGS) -c $(BATCH_GEMM_DIR)/sgemm_batch_naive.cu -o $(BATCH_GEMM_DIR)/sgemm_batch_naive.o
+# CuTe SGEMM（仅在 CUTLASS 存在时编译）
+$(GEMM_DIR)/sgemm_cute.o: $(GEMM_DIR)/sgemm_cute.cu $(SRC_DIR)/common.h $(GEMM_DIR)/gemm_kernels.h
+	$(NVCC) $(CUTLASS_NVCC_FLAGS) -c $(GEMM_DIR)/sgemm_cute.cu -o $(GEMM_DIR)/sgemm_cute.o
+endif
 
 # 清理编译产物
 clean:
-	rm -f $(SRC_DIR)/*.o $(GEMM_DIR)/*.o $(BATCH_GEMM_DIR)/*.o $(TARGET) $(BATCH_TARGET)
+	rm -f $(SRC_DIR)/*.o $(GEMM_DIR)/*.o $(TARGET)
