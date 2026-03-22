@@ -276,3 +276,130 @@ __global__ void reduce_v6_vectorized(float *g_idata, float *g_odata, unsigned in
 虽然手写 Reduction 对于学习非常有帮助，但在实际的项目工程中（如深度学习、科学计算），强烈建议**不要自己造轮子**，而是使用 NVIDIA 官方的 **CUB 库 (CUDA Unbound)**。CUB 内部使用了 `Cooperative Groups`、高度模板化的展开以及针对不同架构（包括 Blackwell）的微调，性能比手写还要高出 5%~10%。
 
 希望这个教程能帮助你驾驭你的 RTX 5090！
+
+---
+
+## 性能测试框架使用说明
+
+本仓库包含一个完整的性能测试框架，用于自动测试和比较 6 个版本的 reduction 实现 + NVIDIA CUB 库基准。
+
+### 文件结构
+
+```
+reduction/
+├── README.md                    # 本教程文档
+├── benchmark.cu                 # 主要测试程序 (C++ 独立可执行文件)
+├── reduction_kernels.cu         # 共享库版本 (用于 Python 绑定)
+├── run_benchmark.py             # Python 包装器 (带可视化)
+├── Makefile                     # 编译脚本
+└── requirements.txt             # Python 依赖
+```
+
+### 快速开始
+
+**1. 编译测试程序**
+```bash
+make
+```
+
+**2. 运行测试**
+```bash
+# 快速测试 (1M 元素)
+make test
+
+# 完整测试 (1M, 10M, 100M)
+make benchmark
+
+# 对比 v1 (朴素) vs v6 (向量化)
+make compare
+
+# 测试单个版本
+make test-v5
+```
+
+### 高级用法
+
+**自定义规模和版本**
+```bash
+# 直接运行 benchmark 可执行文件
+./benchmark --sizes 10M 100M 1G --versions 1 3 5 6
+
+# 快速模式 (减少迭代次数)
+./benchmark --quick --sizes 100M --versions all
+
+# 完整控制
+./benchmark --sizes 1M 10M 100M --versions 1 2 3 4 5 6 7 --warmup 10 --iterations 100
+```
+
+**使用 Python 包装器 (带可视化)**
+```bash
+# 运行测试并生成图表
+python run_benchmark.py --sizes 1M 10M 100M --versions all --plot
+
+# 自定义输出文件名
+python run_benchmark.py --plot --output my_results.png
+```
+
+### 测试输出示例
+
+```
+================================================================================
+CUDA Reduction 性能测试
+================================================================================
+GPU: NVIDIA GeForce RTX 5090 (Compute 8.9)
+Peak Memory Bandwidth: 1792.00 GB/s
+Warmup: 10, Test Iterations: 100
+================================================================================
+
+数据规模: 1048576 元素 (4.00 MB)
+--------------------------------------------------------------------------------
+  ✓ v6_vectorized      :   0.0234 ms |  178.50 GB/s ( 10.0%)
+  ✓ v5_warp_shuffle    :   0.0256 ms |  163.20 GB/s (  9.1%)
+  ✓ cub                :   0.0241 ms |  173.50 GB/s (  9.7%)
+  ...
+```
+
+### 版本对照表
+
+| 版本 | 名称 | 优化点 | 预期性能 |
+|------|------|--------|----------|
+| v1 | Interleaved | 朴素实现 | 基准 (最差) |
+| v2 | Strided | 解决 Warp Divergence | 略优于 v1 |
+| v3 | Sequential | 解决 Bank Conflict | 大幅提升 |
+| v4 | First Add | 加载时合并 | 进一步提升 |
+| v5 | Warp Shuffle | 使用寄存器级通信 | 接近极限 |
+| v6 | Vectorized | 向量化访存 | 极限性能 |
+| CUB | NVIDIA CUB | 官方优化库 | 最优基准 |
+
+### 性能预期
+
+在 RTX 5090 上测试时，你应该观察到：
+- **v1** 只能达到峰值带宽的 1-2% (因为有严重的 Warp Divergence)
+- **v3** 应该能达到峰值带宽的 30-50%
+- **v5/v6** 应该能达到峰值带宽的 80-95%
+- **CUB** 通常比 v6 快 5-10%
+
+如果结果差异不大，可能是因为：
+1. 数据规模太小 (建议至少 10M 元素)
+2. GPU 被其他程序占用
+3. 编译时没有启用正确的架构优化 (检查 Makefile 中的 `-arch=sm_XX`)
+
+### 故障排除
+
+**编译错误**
+```bash
+# 检查 CUDA 是否安装
+nvcc --version
+
+# 如果找不到 CUB 库，手动安装
+# CUB 已包含在 CUDA 11+ 中，通常位于 /usr/local/cuda/include/cub
+```
+
+**运行时错误**
+```bash
+# 检查 GPU 可用性
+nvidia-smi
+
+# 对于大型测试 (1G+)，确保显存足够
+# RTX 5090 的 32GB 显存足够测试任意规模
+```
