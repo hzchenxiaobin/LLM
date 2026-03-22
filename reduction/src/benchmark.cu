@@ -1,13 +1,11 @@
 /**
  * CUDA Reduction 性能测试 - 独立可执行文件
  *
- * 编译: nvcc -O3 -o benchmark benchmark.cu
+ * 编译: make
  * 运行: ./benchmark --sizes 1M 10M 100M
  */
 
-#include <cuda_runtime.h>
-#include <cuda.h>
-#include <cub/cub.cuh>
+#include "reduction_kernels.h"
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -15,175 +13,6 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-
-#define CHECK_CUDA(call) do { \
-    cudaError_t err = call; \
-    if (err != cudaSuccess) { \
-        fprintf(stderr, "CUDA Error at %s:%d - %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
-        exit(1); \
-    } \
-} while(0)
-
-// ============================================================
-// 版本 1: 朴素版本 (Interleaved Addressing)
-// ============================================================
-__global__ void reduce_v1(float *g_idata, float *g_odata, unsigned int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    sdata[tid] = (i < n) ? g_idata[i] : 0.0f;
-    __syncthreads();
-    for (unsigned int s = 1; s < blockDim.x; s *= 2) {
-        if (tid % (2 * s) == 0) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid == 0) atomicAdd(g_odata, sdata[0]);
-}
-
-// ============================================================
-// 版本 2: Strided Index
-// ============================================================
-__global__ void reduce_v2(float *g_idata, float *g_odata, unsigned int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    sdata[tid] = (i < n) ? g_idata[i] : 0.0f;
-    __syncthreads();
-    for (unsigned int s = 1; s < blockDim.x; s *= 2) {
-        int index = 2 * s * tid;
-        if (index < blockDim.x) {
-            sdata[index] += sdata[index + s];
-        }
-        __syncthreads();
-    }
-    if (tid == 0) atomicAdd(g_odata, sdata[0]);
-}
-
-// ============================================================
-// 版本 3: Sequential Addressing (无 Bank Conflict)
-// ============================================================
-__global__ void reduce_v3(float *g_idata, float *g_odata, unsigned int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    sdata[tid] = (i < n) ? g_idata[i] : 0.0f;
-    __syncthreads();
-    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid == 0) atomicAdd(g_odata, sdata[0]);
-}
-
-// ============================================================
-// 版本 4: First Add During Load
-// ============================================================
-__global__ void reduce_v4(float *g_idata, float *g_odata, unsigned int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
-    float mySum = (i < n) ? g_idata[i] : 0.0f;
-    if (i + blockDim.x < n) mySum += g_idata[i + blockDim.x];
-    sdata[tid] = mySum;
-    __syncthreads();
-    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid == 0) atomicAdd(g_odata, sdata[0]);
-}
-
-// ============================================================
-// 版本 5: Warp Shuffle
-// ============================================================
-__inline__ __device__ float warpReduceSum(float val) {
-    for (int offset = warpSize / 2; offset > 0; offset /= 2) {
-        val += __shfl_down_sync(0xffffffff, val, offset);
-    }
-    return val;
-}
-
-__global__ void reduce_v5(float *g_idata, float *g_odata, unsigned int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * (blockDim.x * 2) + threadIdx.x;
-    float sum = (i < n) ? g_idata[i] : 0.0f;
-    if (i + blockDim.x < n) sum += g_idata[i + blockDim.x];
-    sdata[tid] = sum;
-    __syncthreads();
-    for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid < 32) {
-        if (blockDim.x >= 64) sum = sdata[tid] + sdata[tid + 32];
-        else sum = sdata[tid];
-        sum = warpReduceSum(sum);
-        if (tid == 0) atomicAdd(g_odata, sum);
-    }
-}
-
-// ============================================================
-// 版本 6: Vectorized Memory Access
-// ============================================================
-__global__ void reduce_v6(float *g_idata, float *g_odata, unsigned int n) {
-    float4 *g_idata_f4 = reinterpret_cast<float4*>(g_idata);
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    float sum = 0.0f;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    unsigned int stride = blockDim.x * gridDim.x;
-    while (i < n / 4) {
-        float4 vec = g_idata_f4[i];
-        sum += vec.x + vec.y + vec.z + vec.w;
-        i += stride;
-    }
-    i = i * 4;
-    while (i < n) {
-        sum += g_idata[i];
-        i++;
-    }
-    sdata[tid] = sum;
-    __syncthreads();
-    for (unsigned int s = blockDim.x / 2; s > 32; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid < 32) {
-        if (blockDim.x >= 64) sum = sdata[tid] + sdata[tid + 32];
-        else sum = sdata[tid];
-        for (int offset = 16; offset > 0; offset /= 2) {
-            sum += __shfl_down_sync(0xffffffff, sum, offset);
-        }
-        if (tid == 0) atomicAdd(g_odata, sum);
-    }
-}
-
-// ============================================================
-// CPU 参考实现
-// ============================================================
-float reduce_cpu(const float *data, unsigned int n) {
-    double sum = 0.0;
-    for (unsigned int i = 0; i < n; i++) sum += data[i];
-    return (float)sum;
-}
-
-void init_data(float *data, unsigned int n, unsigned int seed) {
-    srand(seed);
-    for (unsigned int i = 0; i < n; i++) {
-        data[i] = (float)rand() / RAND_MAX * 2.0f - 1.0f;
-    }
-}
 
 // ============================================================
 // 测试结构
@@ -197,6 +26,7 @@ struct TestResult {
     float efficiency;
     bool correct;
     float error;
+    float speedup_vs_cub;
 };
 
 struct VersionInfo {
@@ -332,7 +162,7 @@ TestResult run_test(int version, float *d_in, float *d_out,
     return {
         VERSIONS[version-1].name,
         VERSIONS[version-1].desc,
-        n, time_ms, (float)bandwidth_gb_s, 0.0f, correct, error
+        n, time_ms, (float)bandwidth_gb_s, 0.0f, correct, error, 0.0f
     };
 }
 
@@ -477,19 +307,64 @@ int main(int argc, char **argv) {
         init_data(h_in, n, 42);
         CHECK_CUDA(cudaMemcpy(d_in, h_in, n * sizeof(float), cudaMemcpyHostToDevice));
 
+        // 首先运行 CUB 作为基准
+        float cub_time_ms = 0.0f;
+        bool cub_tested = false;
         for (int version : versions_to_test) {
-            if (version < 1 || version > 7) continue;
+            if (version == 7) {
+                try {
+                    TestResult cub_result = run_test(7, d_in, d_out, h_in, h_out, n,
+                                                     warmup, iterations, d_cub_temp, cub_temp_bytes);
+                    cub_time_ms = cub_result.time_ms;
+                    cub_result.efficiency = (cub_result.bandwidth_gb_s / peak_bw) * 100.0f;
+                    cub_result.speedup_vs_cub = 1.0f;
+                    all_results.push_back(cub_result);
+                    cub_tested = true;
+
+                    printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%) [基准]\n",
+                           "✓", cub_result.name.c_str(), cub_result.time_ms,
+                           cub_result.bandwidth_gb_s, cub_result.efficiency);
+                } catch (...) {
+                    printf("  ✗ %-20s: 错误\n", VERSIONS[6].name.c_str());
+                }
+                break;
+            }
+        }
+
+        // 运行 v1-v6，按版本号顺序（不是输入顺序）
+        for (int version = 1; version <= 6; version++) {
+            // 检查该版本是否在测试列表中
+            bool should_test = false;
+            for (int v : versions_to_test) {
+                if (v == version) {
+                    should_test = true;
+                    break;
+                }
+            }
+            if (!should_test) continue;
 
             try {
                 TestResult result = run_test(version, d_in, d_out, h_in, h_out, n,
                                              warmup, iterations, d_cub_temp, cub_temp_bytes);
                 result.efficiency = (result.bandwidth_gb_s / peak_bw) * 100.0f;
+                if (cub_tested && cub_time_ms > 0) {
+                    result.speedup_vs_cub = result.time_ms / cub_time_ms;
+                } else {
+                    result.speedup_vs_cub = 0.0f;
+                }
                 all_results.push_back(result);
 
                 const char* status = result.correct ? "✓" : "✗";
-                printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%)\n",
-                       status, result.name.c_str(), result.time_ms,
-                       result.bandwidth_gb_s, result.efficiency);
+                if (cub_tested) {
+                    printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%) | vs CUB: %.2fx\n",
+                           status, result.name.c_str(), result.time_ms,
+                           result.bandwidth_gb_s, result.efficiency,
+                           result.speedup_vs_cub);
+                } else {
+                    printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%)\n",
+                           status, result.name.c_str(), result.time_ms,
+                           result.bandwidth_gb_s, result.efficiency);
+                }
             } catch (...) {
                 printf("  ✗ %-20s: 错误\n", VERSIONS[version-1].name.c_str());
             }
@@ -497,9 +372,9 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
-    // 打印摘要
+    // 打印摘要 (以 CUB 为基准对比)
     printf("================================================================================\n");
-    printf("性能测试摘要\n");
+    printf("性能测试摘要 (以 CUB 为基准)\n");
     printf("================================================================================\n");
 
     for (unsigned int n : sizes) {
@@ -510,16 +385,42 @@ int main(int argc, char **argv) {
         }
         std::sort(results_for_size.begin(), results_for_size.end(),
                   [](const TestResult& a, const TestResult& b) {
-                      return a.bandwidth_gb_s > b.bandwidth_gb_s;
+                      if (a.name == "cub") return true;
+                      if (b.name == "cub") return false;
+                      return a.speedup_vs_cub > b.speedup_vs_cub;
                   });
 
+        float cub_bw = 0.0f;
+        for (const auto& r : results_for_size) {
+            if (r.name == "cub") {
+                cub_bw = r.bandwidth_gb_s;
+                break;
+            }
+        }
+
         printf("\n%s (%s):\n", format_size(n * sizeof(float)), format_size(n));
-        printf("  %-20s %10s %12s %10s %6s\n", "版本", "时间(ms)", "带宽(GB/s)", "效率", "状态");
+        if (cub_bw > 0) {
+            printf("  CUB 基准: %.2f GB/s\n", cub_bw);
+        }
+        printf("  %-20s %10s %12s %10s %12s %6s\n",
+               "版本", "时间(ms)", "带宽(GB/s)", "效率", "vs CUB", "状态");
         printf("  --------------------------------------------------------------------------------\n");
         for (const auto& r : results_for_size) {
             const char* status = r.correct ? "✓" : "✗";
-            printf("  %-20s %10.4f %12.2f %9.1f%% %6s\n",
-                   r.name.c_str(), r.time_ms, r.bandwidth_gb_s, r.efficiency, status);
+            char vs_cub_str[32];
+            if (r.name == "cub") {
+                snprintf(vs_cub_str, sizeof(vs_cub_str), "基准");
+            } else if (r.speedup_vs_cub > 0) {
+                if (r.speedup_vs_cub >= 1.0f) {
+                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx 慢", r.speedup_vs_cub);
+                } else {
+                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx 快", 1.0f / r.speedup_vs_cub);
+                }
+            } else {
+                snprintf(vs_cub_str, sizeof(vs_cub_str), "N/A");
+            }
+            printf("  %-20s %10.4f %12.2f %9.1f%% %12s %6s\n",
+                   r.name.c_str(), r.time_ms, r.bandwidth_gb_s, r.efficiency, vs_cub_str, status);
         }
     }
 
@@ -531,6 +432,23 @@ int main(int argc, char **argv) {
     printf("\n整体最佳: %s @ %s: %.2f GB/s (%.1f%%)\n",
            best.name.c_str(), format_size(best.n * sizeof(float)),
            best.bandwidth_gb_s, best.efficiency);
+
+    // 最佳手写版本 vs CUB
+    auto best_handwritten = *std::max_element(all_results.begin(), all_results.end(),
+                                              [](const TestResult& a, const TestResult& b) {
+                                                  if (a.name == "cub") return false;
+                                                  if (b.name == "cub") return true;
+                                                  return a.bandwidth_gb_s < b.bandwidth_gb_s;
+                                              });
+    if (best_handwritten.name != "cub" && best_handwritten.speedup_vs_cub > 0) {
+        if (best_handwritten.speedup_vs_cub >= 1.0f) {
+            printf("最佳手写版本 (%s) 比 CUB 慢 %.2f 倍\n",
+                   best_handwritten.name.c_str(), best_handwritten.speedup_vs_cub);
+        } else {
+            printf("最佳手写版本 (%s) 达到 CUB %.1f%% 性能\n",
+                   best_handwritten.name.c_str(), (1.0f / best_handwritten.speedup_vs_cub) * 100.0f);
+        }
+    }
     printf("================================================================================\n");
 
     // 清理

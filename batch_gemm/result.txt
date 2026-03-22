@@ -1,0 +1,10 @@
+Batched GEMM Benchmark (FP32)
+Dimensions: Batch=16, M=1024, N=1024, K=1024
+--------------------------------------------------------
+[cuBLAS]     Avg Time: 0.802677 ms 	 TFLOPS: 42.8064
+--------------------------------------------------------
+[V0_Naive] Avg Time: 5.00144 ms 	 TFLOPS: 6.86996 	 (16.0489% of cuBLAS)
+  -> ✅ Validation PASSED!
+[V1_SharedMem] Avg Time: 3.92865 ms 	 TFLOPS: 8.74595 	 (20.4314% of cuBLAS)
+  -> ✅ Validation PASSED!
+--------------------------------------------------------
