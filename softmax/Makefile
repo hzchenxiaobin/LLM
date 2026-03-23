@@ -7,13 +7,34 @@ NVCC_FLAGS := -O3 -use_fast_math -std=c++17 -I.
 # Detect GPU architecture
 GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.' | sed 's/$$/0/')
 
-# RTX 5090 Blackwell Architecture (sm_100) - GDDR7, 1792 GB/s bandwidth
-# Default to sm_100 for RTX 5090, fallback to sm_80
+# Detect CUDA version
+CUDA_VERSION := $(shell $(NVCC) --version 2>/dev/null | grep "release" | sed 's/.*release \([0-9]\+\.[0-9]\+\).*/\1/')
+CUDA_MAJOR := $(shell echo $(CUDA_VERSION) | cut -d. -f1)
+CUDA_MINOR := $(shell echo $(CUDA_VERSION) | cut -d. -f2)
+
+# Architecture support by CUDA version:
+# sm_100 (Blackwell) - CUDA 12.8+
+# sm_90  (Hopper)    - CUDA 11.8+
+# sm_89  (Ada)       - CUDA 11.8+
+# sm_80  (Ampere)    - CUDA 11.0+
+# sm_75  (Turing)    - CUDA 10.0+
+
+# Set default based on CUDA version if GPU detection fails
 ifeq ($(GPU_ARCH),)
-    ARCH_FLAG := -arch=sm_100
-else
-    ARCH_FLAG := -arch=sm_$(GPU_ARCH)
+    # CUDA 12.8+ supports sm_100 (Blackwell/RTX 5090)
+    ifeq ($(shell [ $(CUDA_MAJOR) -gt 12 -o \( $(CUDA_MAJOR) -eq 12 -a $(CUDA_MINOR) -ge 8 \) ] && echo 1),1)
+        GPU_ARCH := 100
+    else
+        # CUDA 12.0+ supports up to sm_90
+        ifeq ($(shell [ $(CUDA_MAJOR) -ge 12 ] && echo 1),1)
+            GPU_ARCH := 80
+        else
+            GPU_ARCH := 75
+        endif
+    endif
 endif
+
+ARCH_FLAG := -arch=sm_$(GPU_ARCH)
 
 # Allow override from command line
 ifdef ARCH
