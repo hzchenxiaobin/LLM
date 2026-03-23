@@ -350,8 +350,6 @@ tid=2: index=4, 读取 sdata[4](Bank4) 和 sdata[5](Bank5)
 → 这些访问都在不同的 Bank，没有冲突！
 
 更准确的分析：
-sdata[0]:  Bank 0
-sdata[4]:  Bank 1  (16/4=4, 4%32=4? 不对，重新算)
 
 地址 = index * sizeof(float) = index * 4
 Bank = (address / 4) % 32 = index % 32
