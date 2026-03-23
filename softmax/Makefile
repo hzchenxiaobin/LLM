@@ -5,7 +5,7 @@ NVCC := nvcc
 NVCC_FLAGS := -O3 -use_fast_math -std=c++17 -I.
 
 # Detect GPU architecture
-GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.' | sed 's/$$/0/')
+GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 
 # Detect CUDA version
 CUDA_VERSION := $(shell $(NVCC) --version 2>/dev/null | grep "release" | sed 's/.*release \([0-9]\+\.[0-9]\+\).*/\1/')
