@@ -447,6 +447,49 @@ tid 1: sdata[1](Bank1) + sdata[9](Bank9) - 不同 Bank ✓
 
 只要 s < 32 且 s 不整除 32，就不会有冲突
 因为 tid 和 tid+s 的 Bank ID 差为 s，不会相同
+
+**但是，当 blockSize = 64 时，情况需要仔细分析：**
+
+```
+第 1 轮 (s=32):
+index = tid, 读取 sdata[tid] 和 sdata[tid + 32]
+
+活跃线程：tid 0-31 (32 个线程同时在一个 warp 中执行)
+
+tid 0: sdata[0](Bank 0)  + sdata[32](Bank 0)  ← 冲突！
+tid 1: sdata[1](Bank 1)  + sdata[33](Bank 1)  ← 冲突！
+tid 2: sdata[2](Bank 2)  + sdata[34](Bank 2)  ← 冲突！
+...
+tid 31: sdata[31](Bank 31) + sdata[63](Bank 31) ← 冲突！
+
+→ 每个线程同时访问同一个 Bank 的两个不同地址！
+→ 这是 2-way Bank Conflict！
+
+第 2 轮 (s=16):
+index = tid, 读取 sdata[tid] 和 sdata[tid + 16]
+
+tid 0: sdata[0](Bank 0) + sdata[16](Bank 16) - 不同 Bank ✓
+tid 1: sdata[1](Bank 1) + sdata[17](Bank 17) - 不同 Bank ✓
+...
+tid 15: sdata[15](Bank 15) + sdata[31](Bank 31) - 不同 Bank ✓
+
+→ 16 个活跃线程，Bank 相差 16，无冲突！
+
+第 3 轮 (s=8):
+tid 0: sdata[0](Bank 0) + sdata[8](Bank 8) - 不同 Bank ✓
+...
+→ 无冲突！
+
+第 4 轮 (s=4): 无冲突 ✓
+第 5 轮 (s=2): 无冲突 ✓
+第 6 轮 (s=1): 无冲突 ✓
+```
+
+**关键发现：**
+- V3 只有在 `s >= 32` 且 `s` 是 32 的倍数时才会出现 Bank Conflict
+- 当 blockSize = 64 时，只有第 1 轮 (s=32) 会发生 2-way conflict
+- 相比之下，V2 Strided 在多轮中都会发生冲突（当 blockSize > 32 时）
+- **V3 显著减少了 Bank Conflict 的发生次数！**
 ```
 
 ### 4.3 可视化对比
