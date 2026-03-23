@@ -274,9 +274,9 @@ float val = sdata[tid].x;
 └─────────────────────────────────────────────────────────────┘
 
 但如果访问 .y：
-  sdata[0].y: addr 4   → Bank 1
-  sdata[1].y: addr 16  → Bank 0  (16/4=4%32=0)
-  sdata[2].y: addr 28  → Bank 7
+  sdata[0].y: addr 4   → Bank 1   (4/4=1)
+  sdata[1].y: addr 16  → Bank 4   (16/4=4, 4%32=4)
+  sdata[2].y: addr 28  → Bank 7   (28/4=7)
   ...
   
 访问模式更复杂，需要具体分析
@@ -342,7 +342,7 @@ tid 15: 读取 sdata[30] (Bank 30) 和 sdata[31] (Bank 31)
 
 但等等，看 sdata[index + s] 的 Bank：
 tid 0: sdata[1] → Bank 1
-tid 2: sdata[5] → Bank 1 (20/4=5, 不是32的倍数)
+tid 2: sdata[5] → Bank 5 (20/4=5, 5%32=5)
   
 实际上：
 tid=0: index=0, 读取 sdata[0](Bank0) 和 sdata[1](Bank1)
