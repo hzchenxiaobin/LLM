@@ -17,6 +17,7 @@ __global__ void reduction(const float* input, float* output, int N) {
             data[tid] += data[tid + s];
         }
 
+
         __syncthreads();
     }
 
