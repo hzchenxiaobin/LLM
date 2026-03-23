@@ -1,7 +1,7 @@
 // V3: Warp-level Reduction
 // Uses warp shuffle instructions instead of shared memory
 
-#include "softmax_common.h"
+#include "../include/softmax_common.h"
 
 __global__ void softmax_v3_warp_kernel(const float* input, float* output, int M, int N) {
     int warp_id = (blockIdx.x * blockDim.x + threadIdx.x) / 32;
@@ -43,40 +43,4 @@ void softmax_v3(const float* d_input, float* d_output, int M, int N) {
     int blocks = (M + warps_per_block - 1) / warps_per_block;
     softmax_v3_warp_kernel<<<blocks, threads>>>(d_input, d_output, M, N);
     CUDA_CHECK(cudaDeviceSynchronize());
-}
-
-void run_benchmark_v3(const float* d_input, float* d_output,
-                      float* h_output, const float* h_ref,
-                      int M, int N, int warmup_iters, int benchmark_iters,
-                      size_t data_size_bytes, BenchmarkResult* result) {
-
-    printf("Benchmarking V3: Warp-level Reduction...\n");
-
-    for (int i = 0; i < warmup_iters; i++) {
-        softmax_v3(d_input, d_output, M, N);
-    }
-
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double start = get_time_ms();
-
-    for (int i = 0; i < benchmark_iters; i++) {
-        softmax_v3(d_input, d_output, M, N);
-    }
-
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double end = get_time_ms();
-
-    result->name = "V3: Warp-level Reduction";
-    result->time_ms = (end - start) / benchmark_iters;
-
-    double total_bytes = 2.0 * M * N * sizeof(float);
-    result->bandwidth_gbps = (total_bytes / (result->time_ms / 1000.0)) / 1e9;
-
-    CUDA_CHECK(cudaMemcpy(h_output, d_output, data_size_bytes, cudaMemcpyDeviceToHost));
-    result->max_error = max_error(h_output, h_ref, M * N);
-    result->passed = result->max_error < 1e-4;
-
-    printf("  Time: %.4f ms | Bandwidth: %.2f GB/s | Max Error: %.2e | %s\n\n",
-           result->time_ms, result->bandwidth_gbps, result->max_error,
-           result->passed ? "PASSED" : "FAILED");
 }

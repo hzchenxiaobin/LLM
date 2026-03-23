@@ -1,7 +1,7 @@
 // V1: Naive Softmax (3 separate kernels)
 // Most basic implementation - 3 kernels, 6 global memory accesses per element
 
-#include "softmax_common.h"
+#include "../include/softmax_common.h"
 
 // Kernel 1: Find max value per row
 __global__ void kernel_max_v1(const float* input, float* max_vals, int M, int N) {
@@ -52,46 +52,4 @@ void softmax_v1(const float* d_input, float* d_output, float* d_max, float* d_su
     kernel_sum_v1<<<blocks, threads>>>(d_input, d_max, d_sum, M, N);
     kernel_div_v1<<<blocks, threads>>>(d_input, d_max, d_sum, d_output, M, N);
     CUDA_CHECK(cudaDeviceSynchronize());
-}
-
-// Standalone benchmark for V1
-void run_benchmark_v1(const float* d_input, float* d_output, float* d_max, float* d_sum,
-                      float* h_output, const float* h_ref,
-                      int M, int N, int warmup_iters, int benchmark_iters,
-                      size_t data_size_bytes, BenchmarkResult* result) {
-
-    printf("Benchmarking V1: Naive (3 kernels)...\n");
-
-    // Warmup
-    for (int i = 0; i < warmup_iters; i++) {
-        softmax_v1(d_input, d_output, d_max, d_sum, M, N);
-    }
-
-    // Benchmark
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double start = get_time_ms();
-
-    for (int i = 0; i < benchmark_iters; i++) {
-        softmax_v1(d_input, d_output, d_max, d_sum, M, N);
-    }
-
-    CUDA_CHECK(cudaDeviceSynchronize());
-    double end = get_time_ms();
-
-    // Calculate metrics
-    result->name = "V1: Naive (3 kernels)";
-    result->time_ms = (end - start) / benchmark_iters;
-
-    // V1 reads input 3 times, writes output 1 time
-    double total_bytes = 4.0 * M * N * sizeof(float);
-    result->bandwidth_gbps = (total_bytes / (result->time_ms / 1000.0)) / 1e9;
-
-    // Verify correctness
-    CUDA_CHECK(cudaMemcpy(h_output, d_output, data_size_bytes, cudaMemcpyDeviceToHost));
-    result->max_error = max_error(h_output, h_ref, M * N);
-    result->passed = result->max_error < 1e-4;
-
-    printf("  Time: %.4f ms | Bandwidth: %.2f GB/s | Max Error: %.2e | %s\n\n",
-           result->time_ms, result->bandwidth_gbps, result->max_error,
-           result->passed ? "PASSED" : "FAILED");
 }

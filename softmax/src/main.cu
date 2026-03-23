@@ -1,38 +1,7 @@
 // Main benchmark driver - tests all softmax versions
 // Includes: V1, V2, V3, V4, V5, V5+Vec
 
-#include "softmax_common.h"
-
-// Declare benchmark functions from each version
-extern void run_benchmark_v1(const float* d_input, float* d_output, float* d_max, float* d_sum,
-                             float* h_output, const float* h_ref,
-                             int M, int N, int warmup_iters, int benchmark_iters,
-                             size_t data_size_bytes, BenchmarkResult* result);
-
-extern void run_benchmark_v2(const float* d_input, float* d_output,
-                             float* h_output, const float* h_ref,
-                             int M, int N, int warmup_iters, int benchmark_iters,
-                             size_t data_size_bytes, BenchmarkResult* result);
-
-extern void run_benchmark_v3(const float* d_input, float* d_output,
-                             float* h_output, const float* h_ref,
-                             int M, int N, int warmup_iters, int benchmark_iters,
-                             size_t data_size_bytes, BenchmarkResult* result);
-
-extern void run_benchmark_v4(const float* d_input, float* d_output,
-                             float* h_output, const float* h_ref,
-                             int M, int N, int warmup_iters, int benchmark_iters,
-                             size_t data_size_bytes, BenchmarkResult* result);
-
-extern void run_benchmark_v5(const float* d_input, float* d_output,
-                             float* h_output, const float* h_ref,
-                             int M, int N, int warmup_iters, int benchmark_iters,
-                             size_t data_size_bytes, BenchmarkResult* result);
-
-extern void run_benchmark_v5_vec(const float* d_input, float* d_output,
-                                 float* h_output, const float* h_ref,
-                                 int M, int N, int warmup_iters, int benchmark_iters,
-                                 size_t data_size_bytes, BenchmarkResult* result);
+#include "include/softmax_common.h"
 
 // RTX 5090 Blackwell Architecture Specific Optimizations:
 // - Architecture: sm_100 (Blackwell)

@@ -2,7 +2,7 @@
 
 # Compiler settings
 NVCC := nvcc
-NVCC_FLAGS := -O3 -use_fast_math -std=c++17 -I.
+NVCC_FLAGS := -O3 -use_fast_math -std=c++17 -Isrc
 
 # Detect GPU architecture
 GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
@@ -43,63 +43,58 @@ endif
 
 # Source files
 SRC_DIR := src
-SOURCES_ALL := $(SRC_DIR)/softmax_v1_naive.cu $(SRC_DIR)/softmax_v2_shared_memory.cu $(SRC_DIR)/softmax_v3_warp_reduction.cu $(SRC_DIR)/softmax_v4_vectorized.cu $(SRC_DIR)/softmax_v5_online.cu $(SRC_DIR)/softmax_v5_vec_ultimate.cu $(SRC_DIR)/benchmark_all.cu
-SOURCES_SINGLE := $(SRC_DIR)/softmax_common.h $(SRC_DIR)/softmax_v1_naive.cu $(SRC_DIR)/softmax_v2_shared_memory.cu $(SRC_DIR)/softmax_v3_warp_reduction.cu $(SRC_DIR)/softmax_v4_vectorized.cu $(SRC_DIR)/softmax_v5_online.cu $(SRC_DIR)/softmax_v5_vec_ultimate.cu
+SOURCES := $(SRC_DIR)/main.cu \
+           $(SRC_DIR)/softmax/v1_naive.cu \
+           $(SRC_DIR)/softmax/v2_shared_memory.cu \
+           $(SRC_DIR)/softmax/v3_warp_reduction.cu \
+           $(SRC_DIR)/softmax/v4_vectorized.cu \
+           $(SRC_DIR)/softmax/v5_online.cu \
+           $(SRC_DIR)/softmax/v5_vec_ultimate.cu \
+           $(SRC_DIR)/benchmark/benchmark.cu
 
 # Targets
-TARGET_ALL := benchmark_all
-TARGET_MONO := softmax_benchmark
+TARGET := benchmark_all
 
-.PHONY: all clean run run-all run-mono profile help
+.PHONY: all clean run profile help tree
 
-# Default: build both (clean first)
-all: clean $(TARGET_ALL) $(TARGET_MONO)
+# Default: build the benchmark
+all: $(TARGET)
 
-# Build all-in-one benchmark (clean first)
-$(TARGET_ALL): $(SOURCES_ALL)
+# Build the benchmark
+$(TARGET): $(SOURCES)
 	@rm -f $@  # Clean previous build
-	$(NVCC) $(NVCC_FLAGS) $(ARCH_FLAG) -o $@ $(SOURCES_ALL)
+	$(NVCC) $(NVCC_FLAGS) $(ARCH_FLAG) -o $@ $(SOURCES)
 	@echo "Built: $@ ($(ARCH_FLAG))"
 
-# Build single-file version (monolithic) (clean first)
-$(TARGET_MONO): softmax_benchmark.cu
-	@rm -f $@  # Clean previous build
-	$(NVCC) $(NVCC_FLAGS) $(ARCH_FLAG) -o $@ $<
-	@echo "Built: $@ ($(ARCH_FLAG))"
+# Run the benchmark (clean, build and run)
+run: clean $(TARGET)
+	./$(TARGET)
 
-# Run the modular version (clean and rebuild)
-run run-all: clean $(TARGET_ALL)
-	./$(TARGET_ALL)
+# Profile with Nsight Compute (clean, build and profile)
+profile: clean $(TARGET)
+	ncu -o profile_report --metrics dram__bytes.sum,gpu__time_duration.avg ./$(TARGET)
 
-# Run the monolithic version (clean and rebuild)
-run-mono: clean $(TARGET_MONO)
-	./$(TARGET_MONO)
-
-# Profile with Nsight Compute (clean and rebuild)
-profile: clean $(TARGET_ALL)
-	ncu -o profile_report --metrics dram__bytes.sum,gpu__time_duration.avg ./$(TARGET_ALL)
+# Show directory tree
+tree:
+	@echo "Source directory structure:"
+	@find $(SRC_DIR) -type f -name "*.cu" -o -name "*.h" | sort
 
 # Clean build artifacts
 clean:
-	@rm -f $(TARGET_ALL) $(TARGET_MONO) *.o
+	@rm -f $(TARGET) *.o
 	@echo "Cleaned build artifacts"
 
 # Help
 help:
 	@echo "Softmax Benchmark Makefile - Optimized for RTX 5090 (Blackwell)"
 	@echo ""
-	@echo "Build Targets: (auto-clean before build)"
-	@echo "  make all       - Clean and build both versions (default)"
-	@echo "  $(TARGET_ALL)      - Clean and build modular version"
-	@echo "  $(TARGET_MONO)  - Clean and build monolithic version"
-	@echo ""
-	@echo "Run Targets: (clean + build + run)"
-	@echo "  make run       - Clean, build and run modular version"
-	@echo "  make run-all   - Same as 'make run'"
-	@echo "  make run-mono  - Clean, build and run monolithic version"
+	@echo "Build Targets:"
+	@echo "  make all       - Build the benchmark (default)"
+	@echo "  make run       - Clean, build and run the benchmark"
 	@echo ""
 	@echo "Other Targets:"
 	@echo "  make profile   - Clean, build and profile with Nsight Compute"
+	@echo "  make tree      - Show source directory structure"
 	@echo "  make clean     - Remove all build artifacts"
 	@echo "  make help      - Show this help"
 	@echo ""
@@ -107,10 +102,10 @@ help:
 	@echo "  ARCH=sm_XX     - Override GPU architecture (e.g., ARCH=sm_100 for RTX 5090)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                    # Clean and build both versions"
-	@echo "  make ARCH=sm_100        # Clean and build for RTX 5090"
-	@echo "  make run ARCH=sm_100    # Clean, build for RTX 5090 and run"
-	@echo "  make ARCH=sm_89         # Clean and build for RTX 4090"
+	@echo "  make                    # Build the benchmark"
+	@echo "  make ARCH=sm_100        # Build for RTX 5090"
+	@echo "  make run ARCH=sm_100    # Build for RTX 5090 and run"
+	@echo "  make ARCH=sm_89         # Build for RTX 4090"
 	@echo ""
 	@echo "Architecture Reference:"
 	@echo "  sm_100  - Blackwell (RTX 5090, GDDR7, 1792 GB/s)"
