@@ -31,51 +31,54 @@ TARGET_MONO := softmax_benchmark
 
 .PHONY: all clean run run-all run-mono profile help
 
-# Default: build both
-all: $(TARGET_ALL) $(TARGET_MONO)
+# Default: build both (clean first)
+all: clean $(TARGET_ALL) $(TARGET_MONO)
 
-# Build all-in-one benchmark
+# Build all-in-one benchmark (clean first)
 $(TARGET_ALL): $(SOURCES_ALL)
+	@rm -f $@  # Clean previous build
 	$(NVCC) $(NVCC_FLAGS) $(ARCH_FLAG) -o $@ $(SOURCES_ALL)
 	@echo "Built: $@ ($(ARCH_FLAG))"
 
-# Build single-file version (monolithic)
+# Build single-file version (monolithic) (clean first)
 $(TARGET_MONO): softmax_benchmark.cu
+	@rm -f $@  # Clean previous build
 	$(NVCC) $(NVCC_FLAGS) $(ARCH_FLAG) -o $@ $<
 	@echo "Built: $@ ($(ARCH_FLAG))"
 
-# Run the modular version
-run run-all: $(TARGET_ALL)
+# Run the modular version (clean and rebuild)
+run run-all: clean $(TARGET_ALL)
 	./$(TARGET_ALL)
 
-# Run the monolithic version
-run-mono: $(TARGET_MONO)
+# Run the monolithic version (clean and rebuild)
+run-mono: clean $(TARGET_MONO)
 	./$(TARGET_MONO)
 
-# Profile with Nsight Compute
-profile: $(TARGET_ALL)
+# Profile with Nsight Compute (clean and rebuild)
+profile: clean $(TARGET_ALL)
 	ncu -o profile_report --metrics dram__bytes.sum,gpu__time_duration.avg ./$(TARGET_ALL)
 
 # Clean build artifacts
 clean:
-	rm -f $(TARGET_ALL) $(TARGET_MONO) *.o
+	@rm -f $(TARGET_ALL) $(TARGET_MONO) *.o
+	@echo "Cleaned build artifacts"
 
 # Help
 help:
 	@echo "Softmax Benchmark Makefile - Optimized for RTX 5090 (Blackwell)"
 	@echo ""
-	@echo "Build Targets:"
-	@echo "  make all       - Build both modular and monolithic versions (default)"
-	@echo "  $(TARGET_ALL)      - Build modular version (separate files)"
-	@echo "  $(TARGET_MONO)  - Build monolithic version (single file)"
+	@echo "Build Targets: (auto-clean before build)"
+	@echo "  make all       - Clean and build both versions (default)"
+	@echo "  $(TARGET_ALL)      - Clean and build modular version"
+	@echo "  $(TARGET_MONO)  - Clean and build monolithic version"
 	@echo ""
-	@echo "Run Targets:"
-	@echo "  make run       - Build and run modular version"
+	@echo "Run Targets: (clean + build + run)"
+	@echo "  make run       - Clean, build and run modular version"
 	@echo "  make run-all   - Same as 'make run'"
-	@echo "  make run-mono  - Build and run monolithic version"
+	@echo "  make run-mono  - Clean, build and run monolithic version"
 	@echo ""
 	@echo "Other Targets:"
-	@echo "  make profile   - Run with Nsight Compute profiling"
+	@echo "  make profile   - Clean, build and profile with Nsight Compute"
 	@echo "  make clean     - Remove all build artifacts"
 	@echo "  make help      - Show this help"
 	@echo ""
@@ -83,10 +86,10 @@ help:
 	@echo "  ARCH=sm_XX     - Override GPU architecture (e.g., ARCH=sm_100 for RTX 5090)"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make                    # Auto-detect and build both versions"
-	@echo "  make ARCH=sm_100        # Build for RTX 5090 (Blackwell sm_100)"
-	@echo "  make run ARCH=sm_100    # Build for RTX 5090 and run"
-	@echo "  make ARCH=sm_89         # Build for RTX 4090 (Ada)"
+	@echo "  make                    # Clean and build both versions"
+	@echo "  make ARCH=sm_100        # Clean and build for RTX 5090"
+	@echo "  make run ARCH=sm_100    # Clean, build for RTX 5090 and run"
+	@echo "  make ARCH=sm_89         # Clean and build for RTX 4090"
 	@echo ""
 	@echo "Architecture Reference:"
 	@echo "  sm_100  - Blackwell (RTX 5090, GDDR7, 1792 GB/s)"
