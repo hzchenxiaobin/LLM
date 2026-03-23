@@ -5,7 +5,7 @@ NVCC := nvcc
 NVCC_FLAGS := -O3 -use_fast_math -std=c++17 -I.
 
 # Detect GPU architecture
-GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.' | sed 's/$$/0/')
+GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 
 # RTX 5090 Blackwell Architecture (sm_100) - GDDR7, 1792 GB/s bandwidth
 # Default to sm_100 for RTX 5090, fallback to sm_80
