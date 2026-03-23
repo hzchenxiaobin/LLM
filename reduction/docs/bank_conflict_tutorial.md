@@ -346,7 +346,8 @@ tid 2: sdata[5] → Bank 5 (20/4=5, 5%32=5)
   
 实际上：
 tid=0: index=0, 读取 sdata[0](Bank0) 和 sdata[1](Bank1)
-tid=2: index=4, 读取 sdata[4](Bank1) 和 sdata[5](Bank1) - 2-way冲突！
+tid=2: index=4, 读取 sdata[4](Bank4) 和 sdata[5](Bank5)
+→ 这些访问都在不同的 Bank，没有冲突！
 
 更准确的分析：
 sdata[0]:  Bank 0
