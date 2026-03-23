@@ -94,6 +94,13 @@ T __shfl_down_sync(unsigned mask, T var, int delta);
 | `var` | 要传递的变量（寄存器值） |
 | `delta` | 向下偏移量 |
 
+> **什么是 `laneid`？**
+> 
+> `laneid` 是线程在 **Warp 内的索引**，范围是 0-31（对于 32 线程的 Warp）。
+> - 类似于 `threadIdx.x % 32`
+> - 标识线程在 Warp 内的位置
+> - Warp 内的每个线程有唯一的 `laneid`
+
 **作用**：将线程 `laneid + delta` 的 `var` 值传递给线程 `laneid`
 
 ```
