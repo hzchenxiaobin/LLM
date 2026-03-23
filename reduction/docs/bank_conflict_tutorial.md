@@ -325,61 +325,95 @@ for (unsigned int s = 1; s < blockDim.x; s *= 2) {
 }
 ```
 
-**冲突分析**（blockSize = 32）：
+**冲突分析**（blockSize = 32，假设 warp 大小为 32）：
+
+Bank 计算公式：`Bank = (address / 4) % 32 = index % 32`
 
 ```
 第 1 轮 (s=1):
 index = 2 * 1 * tid = 2 * tid
-读取: sdata[2*tid] 和 sdata[2*tid + 1]
 
-线程访问模式：
+线程访问模式（所有 32 个线程同时执行）：
 tid 0: 读取 sdata[0] (Bank 0) 和 sdata[1] (Bank 1)
 tid 1: 读取 sdata[2] (Bank 2) 和 sdata[3] (Bank 3)
+tid 2: 读取 sdata[4] (Bank 4) 和 sdata[5] (Bank 5)
 ...
 tid 15: 读取 sdata[30] (Bank 30) 和 sdata[31] (Bank 31)
+tid 16-31: 被 if (index < 32) 过滤掉，不参与
 
-→ 前 16 个线程，每个访问不同 Bank，无冲突！
+→ 第 1 轮：16 个线程各自访问不同 Bank，无冲突！
 
-但等等，看 sdata[index + s] 的 Bank：
-tid 0: sdata[1] → Bank 1
-tid 2: sdata[5] → Bank 5 (20/4=5, 5%32=5)
-  
-实际上：
-tid=0: index=0, 读取 sdata[0](Bank0) 和 sdata[1](Bank1)
-tid=2: index=4, 读取 sdata[4](Bank4) 和 sdata[5](Bank5)
-→ 这些访问都在不同的 Bank，没有冲突！
-
-更准确的分析：
-
-地址 = index * sizeof(float) = index * 4
-Bank = (address / 4) % 32 = index % 32
-
-所以：
-sdata[0]: 0 % 32 = Bank 0
-sdata[4]: 4 % 32 = Bank 4
-sdata[8]: 8 % 32 = Bank 8
-
-第 1 轮：
-tid 0: sdata[0](Bank0), sdata[1](Bank1)
-tid 1: sdata[2](Bank2), sdata[3](Bank3)
-...
-每个线程读取两个不同 Bank，且无重复 Bank → 无冲突？
-
-实际上冲突在第 2 轮：
-s=2:
+第 2 轮 (s=2):
 index = 2 * 2 * tid = 4 * tid
-tid 0: sdata[0](Bank0) + sdata[2](Bank2)
-tid 1: sdata[4](Bank4) + sdata[6](Bank6)
-tid 2: sdata[8](Bank8) + sdata[10](Bank10)
-...
-还是无冲突？
 
-让我重新分析 V2 的冲突来源：
-问题在 "sdata[index]" 和 "sdata[index + s]" 的 Bank 分布
+线程访问模式（16 个活跃线程）：
+tid 0: 读取 sdata[0] (Bank 0) 和 sdata[2] (Bank 2)
+tid 1: 读取 sdata[4] (Bank 4) 和 sdata[6] (Bank 6)
+tid 2: 读取 sdata[8] (Bank 8) 和 sdata[10] (Bank 10)
+tid 3: 读取 sdata[12] (Bank 12) 和 sdata[14] (Bank 14)
+tid 4: 读取 sdata[16] (Bank 16) 和 sdata[18] (Bank 18)
+tid 5: 读取 sdata[20] (Bank 20) 和 sdata[22] (Bank 22)
+tid 6: 读取 sdata[24] (Bank 24) 和 sdata[26] (Bank 26)
+tid 7: 读取 sdata[28] (Bank 28) 和 sdata[30] (Bank 30)
+tid 8-15: 被过滤
 
-实际上 V2 的冲突不如 V3 描述的那么严重
-真正的 Bank Conflict 经典案例是矩阵转置中的列访问
+→ 第 2 轮：8 个线程各自访问不同 Bank，无冲突！
+
+第 3 轮 (s=4):
+index = 8 * tid
+
+tid 0: sdata[0](Bank 0) + sdata[4](Bank 4)
+tid 1: sdata[8](Bank 8) + sdata[12](Bank 12)
+tid 2: sdata[16](Bank 16) + sdata[20](Bank 20)
+tid 3: sdata[24](Bank 24) + sdata[28](Bank 28)
+
+→ 第 3 轮：4 个线程，无冲突！
+
+第 4 轮 (s=8):
+index = 16 * tid
+
+tid 0: sdata[0](Bank 0) + sdata[8](Bank 8)
+tid 1: sdata[16](Bank 16) + sdata[24](Bank 24)
+
+→ 第 4 轮：2 个线程，无冲突！
+
+第 5 轮 (s=16):
+index = 32 * tid
+
+tid 0: sdata[0](Bank 0) + sdata[16](Bank 16)
+
+→ 第 5 轮：只有 tid 0 活跃，无冲突！
+
+**结论：当 blockSize = 32 时，V2 实际上没有 Bank Conflict！**
 ```
+
+**但是，当 blockSize = 64 时，情况完全不同：**
+
+```
+第 1 轮 (s=1):
+index = 2 * tid
+
+活跃线程：tid 0-31 (32 个线程同时执行)
+
+tid 0: sdata[0](Bank 0)  + sdata[1](Bank 1)
+tid 1: sdata[2](Bank 2)  + sdata[3](Bank 3)
+...
+tid 15: sdata[30](Bank 30) + sdata[31](Bank 31)
+tid 16: sdata[32](Bank 0)  + sdata[33](Bank 1)  ← Bank 0 冲突！
+tid 17: sdata[34](Bank 2)  + sdata[35](Bank 3)  ← Bank 2 冲突！
+...
+tid 31: sdata[62](Bank 30) + sdata[63](Bank 31) ← Bank 30 冲突！
+
+→ tid 0 和 tid 16 同时访问 Bank 0
+→ tid 1 和 tid 17 同时访问 Bank 2
+→ ...
+→ 这是 2-way Bank Conflict！
+```
+
+**关键发现：**
+- `sdata[index]` 的 Bank = `index % 32 = (2*s*tid) % 32`
+- 当 `2*s*tid` 跨越 32 边界时，不同 tid 可能映射到相同 Bank
+- **V2 的 Bank Conflict 程度取决于 blockSize，当 blockSize > 32 时会出现 2-way conflict**
 
 ### 4.2 V3 Sequential 如何解决
 
