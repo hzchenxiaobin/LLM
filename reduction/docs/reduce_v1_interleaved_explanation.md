@@ -240,6 +240,97 @@ __global__ void reduce_v1(float *g_idata, float *g_odata, unsigned int n) {
 
 ---
 
+### 6. 如何设置共享内存大小？
+
+#### CUDA Kernel 启动语法
+
+```cuda
+kernel<<<numBlocks, blockSize, sharedMemSize>>>(...);
+//         块数      每块线程数    共享内存大小(字节)
+```
+
+**第三个参数**就是动态共享内存的大小（以**字节**为单位）。
+
+#### 常见设置方式
+
+**方式 1：与线程数相同大小（每个线程 1 个 float）**
+```cuda
+int blockSize = 256;
+// 每个线程需要一个 float → 256 * 4 = 1024 字节
+reduce_v1<<<numBlocks, blockSize, blockSize * sizeof(float)>>>(...);
+```
+
+**方式 2：自定义更大的共享内存**
+```cuda
+int blockSize = 256;
+// 假设需要双倍空间做临时计算
+size_t sharedMemSize = 2 * blockSize * sizeof(float);  // 2048 字节
+reduce_v1<<<numBlocks, blockSize, sharedMemSize>>>(...);
+```
+
+**方式 3：通过变量动态计算**
+```cuda
+int blockSize = 256;
+int sharedSizePerThread = sizeof(float) + sizeof(int);  // 混合数据类型
+size_t totalSharedMem = blockSize * sharedSizePerThread;
+reduce_v1<<<numBlocks, blockSize, totalSharedMem>>>(...);
+```
+
+#### 完整示例：运行时确定大小
+
+```cuda
+// 主机代码 - 根据数据规模动态选择 block 大小
+void launchReduce(float *d_input, float *d_output, int n) {
+    // 选择合适的 block 大小（通常是 128、256 或 512）
+    int blockSize = 256;
+    int numBlocks = (n + blockSize - 1) / blockSize;
+    
+    // 计算共享内存大小
+    size_t sharedMemSize = blockSize * sizeof(float);
+    
+    printf("Launching kernel with:\n");
+    printf("  Blocks: %d\n", numBlocks);
+    printf("  Threads per block: %d\n", blockSize);
+    printf("  Shared memory per block: %zu bytes\n", sharedMemSize);
+    
+    // 启动 kernel
+    reduce_v1<<<numBlocks, blockSize, sharedMemSize>>>(
+        d_input, d_output, n
+    );
+}
+```
+
+#### 注意事项
+
+| 注意点 | 说明 |
+|--------|------|
+| **单位是字节** | `sharedMemSize` 必须是字节数，不是元素个数 |
+| **硬件限制** | 不能超过 GPU 的最大共享内存（通常 48KB-96KB per block） |
+| **对齐要求** | 建议按 4 或 8 字节对齐，提高访问效率 |
+| **多个数组** | 如果 kernel 中有多个 `extern __shared__` 数组，它们会**共享**这块内存 |
+
+#### 多数组共享内存的情况
+
+```cuda
+__global__ void kernelWithMultipleArrays(float *g_in, float *g_out) {
+    // 两个数组共享同一块动态分配的内存
+    extern __shared__ float sharedData[];
+    
+    // 手动划分空间
+    float *arrayA = sharedData;                    // 前半部分
+    float *arrayB = &sharedData[blockDim.x];      // 后半部分
+    
+    // 使用两个数组
+    arrayA[threadIdx.x] = g_in[threadIdx.x];
+    arrayB[threadIdx.x] = g_in[threadIdx.x + blockDim.x];
+}
+
+// 启动时分配双倍内存
+kernelWithMultipleArrays<<<blocks, threads, 2 * threads * sizeof(float)>>>(...);
+```
+
+---
+
 ## 核心概念：Reduction（归约）
 
 ```cuda
