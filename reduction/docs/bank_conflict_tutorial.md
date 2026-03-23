@@ -251,8 +251,9 @@ __shared__ MyData sdata[32];
 float val = sdata[tid].x;
 ```
 
-```
 内存布局分析：
+
+```
 ┌─────────────────────────────────────────────────────────────┐
 │  MyData[0]   MyData[1]   MyData[2]   MyData[3]   ...       │
 │  ┌────┐      ┌────┐      ┌────┐      ┌────┐                │
@@ -272,8 +273,11 @@ float val = sdata[tid].x;
 │  → 每个线程访问不同 Bank，无冲突 ✓                          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
+```
 
 但如果访问 .y：
+
+```
   sdata[0].y: addr 4   → Bank 1   (4/4=1)
   sdata[1].y: addr 16  → Bank 4   (16/4=4, 4%32=4)
   sdata[2].y: addr 28  → Bank 7   (28/4=7)
@@ -431,9 +435,9 @@ for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
 }
 ```
 
-```
-分析（blockSize = 32）：
+**分析（blockSize = 32）：**
 
+```
 第 1 轮 (s=16):
 tid 0: sdata[0](Bank0) + sdata[16](Bank16) - 不同 Bank ✓
 tid 1: sdata[1](Bank1) + sdata[17](Bank17) - 不同 Bank ✓
@@ -447,6 +451,7 @@ tid 1: sdata[1](Bank1) + sdata[9](Bank9) - 不同 Bank ✓
 
 只要 s < 32 且 s 不整除 32，就不会有冲突
 因为 tid 和 tid+s 的 Bank ID 差为 s，不会相同
+```
 
 **但是，当 blockSize = 64 时，情况需要仔细分析：**
 
@@ -490,7 +495,6 @@ tid 0: sdata[0](Bank 0) + sdata[8](Bank 8) - 不同 Bank ✓
 - 当 blockSize = 64 时，只有第 1 轮 (s=32) 会发生 2-way conflict
 - 相比之下，V2 Strided 在多轮中都会发生冲突（当 blockSize > 32 时）
 - **V3 显著减少了 Bank Conflict 的发生次数！**
-```
 
 ### 4.3 可视化对比
 
