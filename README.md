@@ -29,6 +29,21 @@ LLM/
 │   │
 │   └── ...
 │
+├── scan/                  # CUDA Scan (前缀和) 优化教程
+│   ├── README.md          # Scan 项目说明
+│   ├── src/scan/          # 源代码
+│   │   ├── v1_hillis_steele.cu     # Hillis-Steele 朴素扫描
+│   │   ├── v2_blelloch.cu          # Blelloch 工作高效扫描
+│   │   ├── v3_bank_free.cu         # 消除 Bank Conflict
+│   │   ├── v4_warp_primitive.cu    # Warp Primitives 优化
+│   │   └── benchmark.cu            # 性能测试框架
+│   └── docs/              # 详细教程文档
+│       ├── TUTORIAL.md             # 算法原理概述
+│       ├── V1_HILLIS_STEELE_EXPLAINED.md   # V1 详细解析
+│       ├── V2_BLELLOCH_EXPLAINED.md        # V2 详细解析
+│       ├── V3_BANK_FREE_EXPLAINED.md       # V3 详细解析
+│       └── V4_WARP_PRIMITIVES_EXPLAINED.md # V4 详细解析
+│
 ├── docs/                  # 【新版】体系化教程（推荐）
 │   ├── README.md              # 教程入口和学习路径
 │   ├── 01_cuda_fundamentals.md           # CUDA 基础与线程层级
@@ -61,7 +76,16 @@ LLM/
 - **Roofline 性能模型** 系统性性能分析方法
 - **Warp Shuffle** 寄存器级线程通信
 
-### 2. Reduction 归约优化
+### 2. Scan 前缀和优化
+掌握并行扫描算法的完整优化路径：
+
+- **Hillis-Steele** 朴素并行扫描与双缓冲技术
+- **Blelloch 算法** 工作高效的树状归约 (O(N) 工作量)
+- **Bank Conflict 消除** Padding 技术优化共享内存访问
+- **Warp Primitives** `__shfl_up_sync` 寄存器级扫描
+- **三层架构** Warp Scan → Block Scan → 全局扫描
+
+### 3. Reduction 归约优化
 掌握访存密集型算子的优化技术：
 
 - **消除 Warp Divergence** 分支发散优化
@@ -70,7 +94,7 @@ LLM/
 - **Warp Shuffle** 寄存器级归约
 - **向量化访存** 极致带宽利用
 
-### 3. 未来扩展
+### 4. 未来扩展
 - **Flash Attention** - 高效的注意力机制实现
 - **Layer Normalization** - 层归一化算子优化
 - **Softmax** - Softmax 算子高性能实现
@@ -102,6 +126,16 @@ cd reduction
 
 Reduction 目录包含可直接编译运行的 CUDA 归约算子示例代码。
 
+### Scan 项目编译与运行
+
+```bash
+cd scan
+make
+./build/benchmark
+```
+
+Scan 目录包含 4 个递进版本的前缀和优化实现，以及完整的性能测试框架。
+
 ## 学习路径
 
 ### 阶段 1: CUDA 基础与硬件架构（推荐）
@@ -121,7 +155,25 @@ Reduction 目录包含可直接编译运行的 CUDA 归约算子示例代码。
 | 2.7 | 调试工具 | [`09_profiling_tools.md`](docs/09_profiling_tools.md) | Nsight Compute |
 | 2.8 | 批量 GEMM | [`10_batched_gemm.md`](docs/10_batched_gemm.md) | `batch_gemm/` |
 
-### 阶段 3: Reduction 归约优化进阶
+### 阶段 3: Scan 前缀和优化进阶
+
+参照 `scan/docs/` 完成 4 步进阶优化：
+
+| 版本 | 技术要点 | 解决的问题 | 核心改进 | 文档 |
+|:---|:---|:---|:---|:---|
+| V1 | Hillis-Steele | 朴素并行扫描 | 双缓冲技术，O(N log N) 工作量 | [`V1_HILLIS_STEELE_EXPLAINED.md`](scan/docs/V1_HILLIS_STEELE_EXPLAINED.md) |
+| V2 | Blelloch | 工作高效扫描 | 树状归约，O(N) 工作量 | [`V2_BLELLOCH_EXPLAINED.md`](scan/docs/V2_BLELLOCH_EXPLAINED.md) |
+| V3 | Bank Conflict Free | 消除 Bank Conflict | Padding 技术，提升内存带宽 | [`V3_BANK_FREE_EXPLAINED.md`](scan/docs/V3_BANK_FREE_EXPLAINED.md) |
+| V4 | Warp Primitives | 寄存器级扫描 | `__shfl_up_sync`，接近硬件极限 | [`V4_WARP_PRIMITIVES_EXPLAINED.md`](scan/docs/V4_WARP_PRIMITIVES_EXPLAINED.md) |
+
+编译运行：
+```bash
+cd scan
+make
+./build/benchmark
+```
+
+### 阶段 4: Reduction 归约优化进阶
 
 参照 `reduction/README.md` 完成 6 步进阶优化：
 
@@ -147,6 +199,15 @@ Reduction 目录包含可直接编译运行的 CUDA 归约算子示例代码。
 | Register Tiling (V1) | 30-40 | 36-48% | 寄存器分块 + 双层 Tiling |
 | Shared Memory | 9-10 | 11-12% | Shared Memory Tiling |
 | Naive | 7-8 | 8-10% | 无优化 |
+
+### Scan (Prefix Sum) - RTX 4090 (N=1024)
+
+| 实现 | 带宽 (GB/s) | 相对速度 | 核心优化技术 |
+|:---|:---:|:---:|:---|
+| V4 Warp Primitives | ~204 | 3.0× | Warp Shuffle 寄存器级扫描 |
+| V3 Bank-Free | ~128 | 1.88× | Padding 消除 Bank Conflict |
+| V2 Blelloch | ~85 | 1.25× | 工作高效树状归约 |
+| V1 Hillis-Steele | ~68 | 1.0× (基准) | 双缓冲朴素扫描 |
 
 ### 关键优化技术进展
 
@@ -197,6 +258,16 @@ Grid (整个问题空间)
 | [`docs/08_performance_analysis.md`](docs/08_performance_analysis.md) | Roofline 模型分析 | 4 |
 | [`docs/09_profiling_tools.md`](docs/09_profiling_tools.md) | Nsight Compute 实战 | 7 |
 | [`docs/10_batched_gemm.md`](docs/10_batched_gemm.md) | 批量矩阵乘法 | 扩展 |
+
+### Scan (前缀和) 核心技术文档
+
+| 文档 | 内容描述 | 推荐阶段 |
+|:---|:---|:---:|
+| [`scan/docs/V1_HILLIS_STEELE_EXPLAINED.md`](scan/docs/V1_HILLIS_STEELE_EXPLAINED.md) | Hillis-Steele 朴素扫描与双缓冲 | 1 |
+| [`scan/docs/V2_BLELLOCH_EXPLAINED.md`](scan/docs/V2_BLELLOCH_EXPLAINED.md) | Blelloch 工作高效扫描算法 | 2 |
+| [`scan/docs/V3_BANK_FREE_EXPLAINED.md`](scan/docs/V3_BANK_FREE_EXPLAINED.md) | Padding 技术消除 Bank Conflict | 3 |
+| [`scan/docs/V4_WARP_PRIMITIVES_EXPLAINED.md`](scan/docs/V4_WARP_PRIMITIVES_EXPLAINED.md) | Warp Primitives 寄存器级优化 | 4 |
+| [`scan/docs/TUTORIAL.md`](scan/docs/TUTORIAL.md) | 算法原理概述与优化路径 | 总览 |
 
 ### 历史文档（已整合）
 

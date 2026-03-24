@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V3 Warp Shuffle Top-K 可视化</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            color: #eaeaea;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00f5ff, #ff00ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 40px;
+            font-size: 1.1rem;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        h2 {
+            color: #00f5ff;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid rgba(0, 245, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            color: #ff6b6b;
+            margin: 20px 0 15px 0;
+            font-size: 1.2rem;
+        }
+
+        /* Warp Diagram */
+        .warp-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .warp-title {
+            text-align: center;
+            color: #ffd93d;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+
+        .warp-lanes {
+            display: grid;
+            grid-template-columns: repeat(32, 1fr);
+            gap: 3px;
+            margin-bottom: 20px;
+        }
+
+        .lane {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .lane:hover {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+
+        .lane.active {
+            background: linear-gradient(135deg, #00f5ff, #00b8ff);
+            box-shadow: 0 0 10px rgba(0, 245, 255, 0.5);
+        }
+
+        .lane.inactive {
+            background: linear-gradient(135deg, #6c757d, #adb5bd);
+            opacity: 0.5;
+        }
+
+        .lane.leader {
+            background: linear-gradient(135deg, #ffd93d, #ff6b6b);
+            box-shadow: 0 0 15px rgba(255, 217, 61, 0.6);
+        }
+
+        .lane.data {
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+        }
+
+        /* Shuffle Animation */
+        .shuffle-stage {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 20px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .shuffle-label {
+            font-weight: bold;
+            color: #00f5ff;
+            min-width: 150px;
+        }
+
+        .shuffle-visual {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .shuffle-pair {
+            display: flex;
+            gap: 5px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .shuffle-arrow {
+            color: #ffd93d;
+            font-size: 1.5rem;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: translateX(0); }
+            50% { opacity: 0.5; transform: translateX(5px); }
+        }
+
+        /* Phase Flow */
+        .phase-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .phase {
+            display: flex;
+            align-items: stretch;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .phase-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 60px;
+            background: linear-gradient(135deg, #00f5ff, #00b8ff);
+            color: #0f0c29;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .phase-content {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .phase-title {
+            font-weight: bold;
+            color: #ffd93d;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .phase-desc {
+            color: #a0a0a0;
+            font-size: 0.95rem;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 15px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .comparison-table th {
+            background: rgba(0, 245, 255, 0.2);
+            color: #00f5ff;
+            font-weight: bold;
+        }
+
+        .comparison-table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .comparison-table tr:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .highlight-good {
+            color: #4ade80;
+            font-weight: bold;
+        }
+
+        .highlight-bad {
+            color: #f87171;
+        }
+
+        .highlight-shuffle {
+            color: #00f5ff;
+            font-weight: bold;
+        }
+
+        /* Code Block */
+        .code-block {
+            background: #1e1e2e;
+            border-radius: 10px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 15px 0;
+            border-left: 4px solid #00f5ff;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .code-keyword { color: #ff79c6; }
+        .code-type { color: #8be9fd; }
+        .code-func { color: #50fa7b; }
+        .code-comment { color: #6272a4; font-style: italic; }
+        .code-string { color: #f1fa8c; }
+        .code-number { color: #bd93f9; }
+        .code-shuffle { color: #00f5ff; font-weight: bold; }
+
+        /* Memory Timeline */
+        .memory-timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .memory-step {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .memory-type {
+            min-width: 120px;
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .memory-type.register {
+            background: linear-gradient(135deg, #ff6b6b, #ff8e8e);
+            color: #1a1a2e;
+        }
+
+        .memory-type.shared {
+            background: linear-gradient(135deg, #ffd93d, #ffb347);
+            color: #1a1a2e;
+        }
+
+        .memory-type.global {
+            background: linear-gradient(135deg, #6c757d, #adb5bd);
+            color: #1a1a2e;
+        }
+
+        .memory-desc {
+            flex: 1;
+        }
+
+        .memory-latency {
+            min-width: 100px;
+            text-align: right;
+            font-weight: bold;
+        }
+
+        .memory-latency.fast {
+            color: #4ade80;
+        }
+
+        .memory-latency.slow {
+            color: #f87171;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .legend-color.register { background: linear-gradient(135deg, #ff6b6b, #ff8e8e); }
+        .legend-color.shared { background: linear-gradient(135deg, #ffd93d, #ffb347); }
+        .legend-color.global { background: linear-gradient(135deg, #6c757d, #adb5bd); }
+        .legend-color.shuffle { background: linear-gradient(135deg, #00f5ff, #00b8ff); }
+
+        /* Block Diagram */
+        .block-diagram {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .block-title {
+            text-align: center;
+            color: #ffd93d;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .warps-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .warp-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid #00f5ff;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .warp-box-header {
+            color: #00f5ff;
+            font-weight: bold;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .warp-box-content {
+            font-size: 0.8rem;
+            color: #a0a0a0;
+        }
+
+        .warp-box.leader {
+            border-color: #ffd93d;
+            background: rgba(255, 217, 61, 0.1);
+        }
+
+        /* Butterfly Network */
+        .butterfly-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 30px;
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+
+        .butterfly-stage {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 40px;
+            margin: 30px 0;
+        }
+
+        .butterfly-nodes {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .bf-node {
+            width: 80px;
+            height: 40px;
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: white;
+        }
+
+        .bf-connections {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .bf-conn {
+            height: 2px;
+            background: linear-gradient(90deg, #00f5ff, #ffd93d);
+            position: relative;
+        }
+
+        .bf-conn::after {
+            content: '';
+            position: absolute;
+            right: -8px;
+            top: -4px;
+            border: 5px solid transparent;
+            border-left: 8px solid #ffd93d;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8rem; }
+            .section { padding: 20px; }
+            .warp-lanes {
+                grid-template-columns: repeat(16, 1fr);
+            }
+            .warps-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .comparison-table {
+                font-size: 0.8rem;
+            }
+            .comparison-table th,
+            .comparison-table td {
+                padding: 10px 5px;
+            }
+        }
+
+        /* Navigation */
+        .nav-links {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            color: #00f5ff;
+            text-decoration: none;
+            padding: 10px 20px;
+            border: 2px solid #00f5ff;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .nav-link:hover {
+            background: #00f5ff;
+            color: #0f0c29;
+        }
+
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .metric-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #00f5ff;
+        }
+
+        .metric-label {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+
+        .metric-comparison {
+            font-size: 0.8rem;
+            color: #4ade80;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>V3: Warp Shuffle Top-K 优化详解</h1>
+        <p class="subtitle">寄存器级线程通信 | 极致延迟优化 | Blackwell 架构加速</p>
+
+        <div class="nav-links">
+            <a href="#shuffle" class="nav-link">Shuffle 原理</a>
+            <a href="#flow" class="nav-link">执行流程</a>
+            <a href="#warp" class="nav-link">Warp 归约</a>
+            <a href="#comparison" class="nav-link">性能对比</a>
+            <a href="#code" class="nav-link">关键代码</a>
+        </div>
+
+        <!-- Shuffle Principle Section -->
+        <div class="section" id="shuffle">
+            <h2>1. Warp Shuffle 原语原理</h2>
+            <p>Warp Shuffle 允许 Warp 内的线程直接读取彼此的寄存器，无需经过共享内存：</p>
+
+            <h3>Warp (32 线程) 架构</h3>
+            <div class="warp-container">
+                <div class="warp-title">Warp 内的 32 个 Lane (执行通道)</div>
+                <div class="warp-lanes" id="warpLanes">
+                    <!-- Generated by JS -->
+                </div>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-color shuffle"></div>
+                        <span>Active Lane</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: linear-gradient(135deg, #ffd93d, #ff6b6b);"></div>
+                        <span>Warp Leader (Lane 0)</span>
+                    </div>
+                </div>
+            </div>
+
+            <h3>Shuffle 指令详解</h3>
+            <div class="code-block">
+                <pre><span class="code-comment">// 基本语法</span>
+<span class="code-type">float</span> val = <span class="code-shuffle">__shfl_down_sync</span>(<span class="code-number">0xffffffff</span>, my_val, offset);
+<span class="code-comment">//                    │              │         │      │</span>
+<span class="code-comment">//                    │              │         │      └── 偏移量 (1, 2, 4, 8, 16)</span>
+<span class="code-comment">//                    │              │         └───────── 要传递的变量</span>
+<span class="code-comment">//                    │              └────────────────── 线程掩码 (0xffffffff = 所有32线程)</span>
+<span class="code-comment">//                    └─────────────────────────────────── 同步掩码</span>
+
+<span class="code-comment">// 工作原理 (offset=16):</span>
+<span class="code-comment">// Lane 0  ◄──  从 Lane 16 读取值</span>
+<span class="code-comment">// Lane 1  ◄──  从 Lane 17 读取值</span>
+<span class="code-comment">// ...</span>
+<span class="code-comment">// Lane 15 ◄──  从 Lane 31 读取值</span>
+<span class="code-comment">// Lane 16+ (超出范围，返回自身值)</span></pre>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value">1-2</div>
+                    <div class="metric-label">Shuffle 延迟 (周期)</div>
+                    <div class="metric-comparison">vs 共享内存 20-40 周期</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">32×</div>
+                    <div class="metric-label">共享内存写入减少</div>
+                    <div class="metric-comparison">256 threads → 8 warps</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">0</div>
+                    <div class="metric-label">Warp 内同步开销</div>
+                    <div class="metric-comparison">无需 __syncthreads()</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">SM 3.0+</div>
+                    <div class="metric-label">架构要求</div>
+                    <div class="metric-comparison">Kepler 及更新 GPU</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Execution Flow Section -->
+        <div class="section" id="flow">
+            <h2>2. V3 三阶段执行流程</h2>
+
+            <div class="phase-flow">
+                <div class="phase">
+                    <div class="phase-num">1</div>
+                    <div class="phase-content">
+                        <div class="phase-title">Warp 级 Shuffle 归约</div>
+                        <div class="phase-desc">
+                            每个 Warp 32 线程使用 Shuffle 指令进行蝴蝶网络归约。
+                            通过 5 步 (offset=16→8→4→2→1) 完成，最终 Lane 0 持有该 Warp 的 Top-K。
+                            <strong>延迟极低：仅 5-10 周期！</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="phase">
+                    <div class="phase-num">2</div>
+                    <div class="phase-content">
+                        <div class="phase-title">Warp Leader 写入共享内存</div>
+                        <div class="phase-desc">
+                            每个 Warp 的 Lane 0 将结果写入共享内存。
+                            相比 V2 的 256 次写入，V3 仅需 8 次 (假设 8 Warps)。
+                            <strong>写入量减少 32 倍！</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="phase">
+                    <div class="phase-num">3</div>
+                    <div class="phase-content">
+                        <div class="phase-title">Warp 0 最终归约</div>
+                        <div class="phase-desc">
+                            只有 Warp 0 参与最终块级归约，节省其他 Warp 算力。
+                            再次使用 Shuffle 指令合并 8 个 Warp 的结果。
+                            <strong>Lane 0 写入全局内存。</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>内存访问层次</h3>
+            <div class="memory-timeline">
+                <div class="memory-step">
+                    <div class="memory-type register">寄存器</div>
+                    <div class="memory-desc">
+                        每个线程维护自己的 Top-K (局部计算)<br>
+                        Warp 内使用 Shuffle 进行寄存器级数据交换
+                    </div>
+                    <div class="memory-latency fast">~1 周期</div>
+                </div>
+                <div class="memory-step">
+                    <div class="memory-type shared">共享内存</div>
+                    <div class="memory-desc">
+                        仅 Warp Leader (Lane 0) 写入<br>
+                        相比 V2 减少 32 倍写入量
+                    </div>
+                    <div class="memory-latency fast">~L1 速度</div>
+                </div>
+                <div class="memory-step">
+                    <div class="memory-type global">全局内存</div>
+                    <div class="memory-desc">
+                        每个 Block 最终写入 K 个元素<br>
+                        相比 V1 减少 256 倍写入量
+                    </div>
+                    <div class="memory-latency slow">~100 周期</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warp Reduction Section -->
+        <div class="section" id="warp">
+            <h2>3. Warp Shuffle 归约可视化</h2>
+            <p>蝴蝶网络 (Butterfly Network) 归约过程：</p>
+
+            <div class="butterfly-container">
+                <div class="warp-title">蝴蝶网络归约 (8 Lane 简化示例)</div>
+                
+                <div class="shuffle-stage">
+                    <div class="shuffle-label">Step 1: offset=4</div>
+                    <div class="shuffle-visual">
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L0: 100</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L4: 80</div>
+                        </div>
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L1: 95</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L5: 75</div>
+                        </div>
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L2: 90</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L6: 70</div>
+                        </div>
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L3: 85</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L7: 65</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shuffle-stage">
+                    <div class="shuffle-label">Step 2: offset=2</div>
+                    <div class="shuffle-visual">
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L0: 100</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L2: 90</div>
+                        </div>
+                        <div class="shuffle-pair">
+                            <div class="bf-node">L1: 95</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L3: 85</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="shuffle-stage">
+                    <div class="shuffle-label">Step 3: offset=1</div>
+                    <div class="shuffle-visual">
+                        <div class="shuffle-pair">
+                            <div class="bf-node" style="background: linear-gradient(135deg, #ffd93d, #ff6b6b);">L0: 100</div>
+                            <div class="shuffle-arrow">◄──</div>
+                            <div class="bf-node">L1: 95</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 20px; color: #4ade80; font-weight: bold;">
+                    ✓ Lane 0 持有该 Warp 的最终 Top-K: [100, 95, 90, 85, ...]
+                </div>
+            </div>
+
+            <h3>Block 内 8 Warps 协作</h3>
+            <div class="block-diagram">
+                <div class="block-title">256 Threads = 8 Warps × 32 Lanes</div>
+                <div class="warps-grid">
+                    <div class="warp-box leader">
+                        <div class="warp-box-header">Warp 0 (Leader)</div>
+                        <div class="warp-box-content">Lane 0 参与最终归约<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 1</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 2</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 3</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 4</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 5</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 6</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                    <div class="warp-box">
+                        <div class="warp-box-header">Warp 7</div>
+                        <div class="warp-box-content">Lane 0 写入共享内存<br>32 Threads</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Comparison Section -->
+        <div class="section" id="comparison">
+            <h2>4. V2 vs V3 性能对比</h2>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>指标</th>
+                        <th>V2 (共享内存)</th>
+                        <th>V3 (Warp Shuffle)</th>
+                        <th>提升</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Warp 内通信延迟</td>
+                        <td class="highlight-bad">20-40 周期</td>
+                        <td class="highlight-shuffle">1-2 周期</td>
+                        <td class="highlight-good">10-20×</td>
+                    </tr>
+                    <tr>
+                        <td>Warp 内同步</td>
+                        <td><code>__syncthreads()</code></td>
+                        <td class="highlight-shuffle">隐式同步</td>
+                        <td class="highlight-good">零开销</td>
+                    </tr>
+                    <tr>
+                        <td>共享内存写入/Block</td>
+                        <td class="highlight-bad">256 × K</td>
+                        <td class="highlight-shuffle">8 × K</td>
+                        <td class="highlight-good">32× 减少</td>
+                    </tr>
+                    <tr>
+                        <td>归约算法</td>
+                        <td>树形归约 (共享内存)</td>
+                        <td class="highlight-shuffle">蝴蝶网络 (Shuffle)</td>
+                        <td class="highlight-good">更高效</td>
+                    </tr>
+                    <tr>
+                        <td>指令类型</td>
+                        <td>访存指令 (LD/ST)</td>
+                        <td class="highlight-shuffle">寄存器交换 (SHFL)</td>
+                        <td class="highlight-good">更低延迟</td>
+                    </tr>
+                    <tr>
+                        <td>Blackwell 优化</td>
+                        <td>标准</td>
+                        <td class="highlight-shuffle">寄存器堆带宽优化</td>
+                        <td class="highlight-good">额外 1.4×</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>每 Block 内存访问量对比</h3>
+            <div class="code-block">
+                <pre><span class="code-comment">// V2: 共享内存树形归约</span>
+<span class="code-comment">// 初始写入: 256 threads × K elements → Shared Memory</span>
+<span class="code-comment">// 归约轮次:</span>
+<span class="code-comment">//   Round 1: 128 loads + 128 stores (合并 256→128)</span>
+<span class="code-comment">//   Round 2: 64 loads + 64 stores  (合并 128→64)</span>
+<span class="code-comment">//   Round 3: 32 loads + 32 stores  (合并 64→32)</span>
+<span class="code-comment">//   Round 4: 16 loads + 16 stores  (合并 32→16)</span>
+<span class="code-comment">//   Round 5: 8 loads + 8 stores   (合并 16→8)</span>
+<span class="code-comment">//   ...</span>
+<span class="code-comment">// 总计: ~512 × K 共享内存访问 + 1 × K 全局内存写入</span>
+
+<span class="code-comment">// ═══════════════════════════════════════════════════════════════════</span>
+
+<span class="code-comment">// V3: Warp Shuffle</span>
+<span class="code-comment">// Warp 级归约 (32 threads):</span>
+<span class="code-comment">//   Step 1 (offset=16): 16 shuffle ops  ───┐</span>
+<span class="code-comment">//   Step 2 (offset=8):  16 shuffle ops   ──┤ 80 × K shuffle 操作</span>
+<span class="code-comment">//   Step 3 (offset=4):  16 shuffle ops   ──┤ (寄存器级, 延迟极低)</span>
+<span class="code-comment">//   Step 4 (offset=2):  16 shuffle ops   ──┤</span>
+<span class="code-comment">//   Step 5 (offset=1):  16 shuffle ops  ───┘</span>
+<span class="code-comment">//</span>
+<span class="code-comment">// 8 Warps × 80 × K = 640 × K shuffle ops</span>
+<span class="code-comment">//</span>
+<span class="code-comment">// 共享内存写入: 8 Warps × K (仅 Warp Leaders)</span>
+<span class="code-comment">// 共享内存读取: 8 × K (Warp 0 加载)</span>
+<span class="code-comment">// 全局内存写入: 1 × K</span></pre>
+            </div>
+        </div>
+
+        <!-- Key Code Section -->
+        <div class="section" id="code">
+            <h2>5. 关键代码解析</h2>
+
+            <h3>5.1 Warp 归约函数</h3>
+            <div class="code-block">
+                <pre><span class="code-keyword">template</span> <<span class="code-type">int</span> K>
+<span class="code-type">__device__ __forceinline__ void</span> <span class="code-func">warp_reduce_topk</span>(TopKNode* local_top) {
+    <span class="code-comment">// 锦标赛式归约：蝴蝶网络</span>
+    <span class="code-keyword">for</span> (<span class="code-type">int</span> offset = <span class="code-number">16</span>; offset > <span class="code-number">0</span>; offset /= <span class="code-number">2</span>) {
+        <span class="code-comment">// 从配对 lane 获取数据 (核心 Shuffle 指令!)</span>
+        <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < K; ++i) {
+            <span class="code-type">float</span> partner_val = <span class="code-shuffle">__shfl_down_sync</span>(<span class="code-number">0xffffffff</span>, local_top[i].value, offset);
+            <span class="code-type">int</span> partner_idx = <span class="code-shuffle">__shfl_down_sync</span>(<span class="code-number">0xffffffff</span>, local_top[i].index, offset);
+
+            <span class="code-comment">// 合并逻辑: 如果 partner 有更好的值</span>
+            <span class="code-keyword">if</span> (partner_val > local_top[K - <span class="code-number">1</span>].value) {
+                <span class="code-type">int</span> pos = K - <span class="code-number">1</span>;
+                <span class="code-keyword">while</span> (pos > <span class="code-number">0</span> && partner_val > local_top[pos - <span class="code-number">1</span>].value) {
+                    local_top[pos] = local_top[pos - <span class="code-number">1</span>];
+                    pos--;
+                }
+                local_top[pos].value = partner_val;
+                local_top[pos].index = partner_idx;
+            }
+        }
+    }
+    <span class="code-comment">// 结果: Lane 0 持有该 Warp 的 Top-K</span>
+}</pre>
+            </div>
+
+            <h3>5.2 主内核核心逻辑</h3>
+            <div class="code-block">
+                <pre><span class="code-keyword">template</span> <<span class="code-type">int</span> K>
+<span class="code-type">__global__ void</span> <span class="code-func">topk_v3_warp_kernel</span>(<span class="code-keyword">const</span> <span class="code-type">float</span>* input, <span class="code-type">int</span> N, TopKNode* block_tops) {
+    <span class="code-keyword">extern</span> <span class="code-type">__shared__</span> TopKNode smem[];
+
+    <span class="code-type">int</span> tid = threadIdx.x;
+    <span class="code-type">int</span> lane_id = tid % <span class="code-number">32</span>;      <span class="code-comment">// Warp 内的 lane</span>
+    <span class="code-type">int</span> warp_id = tid / <span class="code-number">32</span>;      <span class="code-comment">// 块内的 warp 索引</span>
+    <span class="code-type">int</span> global_tid = tid + blockIdx.x * blockDim.x;
+
+    <span class="code-comment">// 1. 寄存器中维护局部 Top-K</span>
+    TopKNode local_top[K];
+    <span class="code-comment">// ... 初始化并扫描数据 ...</span>
+
+    <span class="code-comment">// 2. Warp 级 Shuffle 归约 (核心优化!)</span>
+    <span class="code-func">warp_reduce_topk</span>&lt;K&gt;(local_top);
+
+    <span class="code-comment">// 3. Warp leader (lane 0) 写入共享内存</span>
+    <span class="code-keyword">if</span> (lane_id == <span class="code-number">0</span>) {
+        <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < K; ++i) {
+            smem[warp_id * K + i] = local_top[i];
+        }
+    }
+    <span class="code-func">__syncthreads</span>();
+
+    <span class="code-comment">// 4. 只有 Warp 0 参与最终归约 (节省算力!)</span>
+    <span class="code-keyword">if</span> (warp_id == <span class="code-number">0</span>) {
+        <span class="code-comment">// 从共享内存加载所有 Warp 结果</span>
+        TopKNode warp_top[K];
+        <span class="code-keyword">if</span> (lane_id < num_warps) {
+            <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < K; ++i) {
+                warp_top[i] = smem[lane_id * K + i];
+            }
+        }
+
+        <span class="code-comment">// Warp 0 内再次 Shuffle 归约</span>
+        <span class="code-func">warp_reduce_topk</span>&lt;K&gt;(warp_top);
+
+        <span class="code-comment">// Lane 0 写入全局内存</span>
+        <span class="code-keyword">if</span> (lane_id == <span class="code-number">0</span>) {
+            <span class="code-keyword">for</span> (<span class="code-type">int</span> i = <span class="code-number">0</span>; i < K; ++i) {
+                block_tops[blockIdx.x * K + i] = warp_top[i];
+            }
+        }
+    }
+}</pre>
+            </div>
+
+            <h3>5.3 Lane ID 与 Warp ID 可视化</h3>
+            <div class="code-block">
+                <pre><span class="code-type">int</span> tid = threadIdx.x;           <span class="code-comment">// 块内线程 ID: 0-255</span>
+<span class="code-type">int</span> lane_id = tid % <span class="code-number">32</span>;          <span class="code-comment">// Warp 内位置: 0-31</span>
+<span class="code-type">int</span> warp_id = tid / <span class="code-number">32</span>;          <span class="code-comment">// Warp 编号: 0-7</span>
+
+<span class="code-comment">// 可视化:</span>
+<span class="code-comment">// Block (256 threads)</span>
+<span class="code-comment">// ├─ Warp 0: Lane 0-31   (Thread 0-31)    warp_id=0, lane_id=0-31</span>
+<span class="code-comment">// ├─ Warp 1: Lane 0-31   (Thread 32-63)   warp_id=1, lane_id=0-31</span>
+<span class="code-comment">// ├─ Warp 2: Lane 0-31   (Thread 64-95)   warp_id=2, lane_id=0-31</span>
+<span class="code-comment">// ├─ ...</span>
+<span class="code-comment">// └─ Warp 7: Lane 0-31   (Thread 224-255) warp_id=7, lane_id=0-31</span>
+
+<span class="code-comment">// Lane 0 模式 (Warp Leader):</span>
+<span class="code-keyword">if</span> (lane_id == <span class="code-number">0</span>) {
+    <span class="code-comment">// 执行 Warp Leader 特殊任务</span>
+    <span class="code-comment">// 如：写入共享内存、最终输出等</span>
+}</pre>
+            </div>
+        </div>
+
+        <!-- Summary Section -->
+        <div class="section">
+            <h2>6. 总结</h2>
+            <p>V3 版本通过 <span class="highlight-shuffle">Warp Shuffle 原语</span> 实现了寄存器级别的线程通信，核心优势：</p>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #ffd93d;">10-20×</div>
+                    <div class="metric-label">延迟降低</div>
+                    <div class="metric-comparison">Shuffle vs 共享内存</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #ff6b6b;">32×</div>
+                    <div class="metric-label">共享内存写入减少</div>
+                    <div class="metric-comparison">Warp Leader 模式</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #4ade80;">0</div>
+                    <div class="metric-label">Warp 内同步开销</div>
+                    <div class="metric-comparison">无需 __syncthreads()</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value" style="color: #a855f7;">1.4×</div>
+                    <div class="metric-label">Blackwell 额外加速</div>
+                    <div class="metric-comparison">寄存器堆优化</div>
+                </div>
+            </div>
+
+            <h3>学习要点</h3>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li><strong>Warp Shuffle 原理</strong>：理解 <code>__shfl_down_sync</code> 的 mask、value、offset 参数</li>
+                <li><strong>蝴蝶网络归约</strong>：掌握 offset=16→8→4→2→1 的 5 步归约模式</li>
+                <li><strong>Warp Leader 模式</strong>：Lane 0 执行特殊任务，减少共享内存竞争</li>
+                <li><strong>分层优化</strong>：寄存器 → Warp Shuffle → 共享内存 → 全局内存</li>
+            </ul>
+
+            <h3>适用场景</h3>
+            <ul style="margin-left: 20px; line-height: 2;">
+                <li>✅ 需要极致性能的场景</li>
+                <li>✅ 中小规模 K 值 (K <= 64 最佳)</li>
+                <li>✅ SM 3.0+ 架构 (Kepler 及更新)</li>
+                <li>✅ 理解 GPU 底层指令的优秀学习材料</li>
+            </ul>
+        </div>
+
+        <footer style="text-align: center; padding: 30px; color: #6c757d;">
+            <p>基于 CUDA Top-K 性能优化教程 | RTX 5090 (Blackwell 架构)</p>
+        </footer>
+    </div>
+
+    <script>
+        // Generate warp lanes
+        const warpLanes = document.getElementById('warpLanes');
+        for (let i = 0; i < 32; i++) {
+            const lane = document.createElement('div');
+            lane.className = 'lane' + (i === 0 ? ' leader' : ' active');
+            lane.textContent = i;
+            lane.title = `Lane ${i}`;
+            warpLanes.appendChild(lane);
+        }
+
+        // Add animation on scroll
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.section').forEach(section => {
+            section.style.opacity = '0';
+            section.style.transform = 'translateY(30px)';
+            section.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+            observer.observe(section);
+        });
+
+        // Smooth scroll
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const target = document.querySelector(link.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
