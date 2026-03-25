@@ -23,29 +23,29 @@ flowchart TB
             LoopStart[for k_idx=0 to N-1]
 
             subgraph InnerStep1[计算注意力分数]
-                LoadK[加载K[k_idx]到寄存器]
-                Dot[计算 dot(q_vec, K[k_idx])]
-                Scale[乘以 scale=1/√d]
-                ResultQK[qk值]
+                LoadK["加载K行到寄存器"]
+                Dot["计算 dot(q_vec, K行)"]
+                Scale["乘以 scale=1/√d"]
+                ResultQK["qk值"]
             end
 
             subgraph InnerStep2[Online Softmax更新]
-                UpdateM[m = max(m, qk)]
-                CalcExp[计算 exp_factor]
-                UpdateL[l = l × exp_prev + exp_curr]
+                UpdateM["m = max(m, qk)"]
+                CalcExp["计算 exp_factor"]
+                UpdateL["l = l × exp_prev + exp_curr"]
             end
 
             subgraph InnerStep3[更新输出累加器]
-                LoadV[加载V[k_idx]到寄存器]
-                UpdateO["o_acc = o_acc × exp_prev + exp_curr × V[k_idx]"]
+                LoadV["加载V行到寄存器"]
+                UpdateO["o_acc = o_acc × exp_prev + exp_curr × V行"]
             end
 
             LoopEnd{继续循环?}
         end
 
         subgraph Step3[步骤3: 归一化输出]
-            Normalize[O = o_acc / l]
-            WriteO[写回HBM]
+            Normalize["O = o_acc / l"]
+            WriteO["写回HBM"]
         end
     end
 
