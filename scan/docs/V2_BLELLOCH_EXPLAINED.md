@@ -436,6 +436,222 @@ if (thid < d) {   // 只有前d个线程活跃
 
 ---
 
+## 代码逐行详解
+
+以下是对 `v2_blelloch.cu` 中 `blelloch_scan_kernel` 函数**每一行代码**的详细解释：
+
+### 函数签名与共享内存声明
+
+```cuda
+1 | template <typename T>
+2 | __global__ void blelloch_scan_kernel(T* g_odata, const T* g_idata, int n) {
+3 |     extern __shared__ T temp[];
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 1 | `template <typename T>` | 模板声明，支持多种数据类型(float, int, double等) |
+| 2 | `__global__` | CUDA全局函数修饰符，表示这是GPU kernel函数 |
+| 2 | `T* g_odata` | 输出指针(global output data)，前缀和结果写入这里 |
+| 2 | `const T* g_idata` | 输入指针(global input data)，原始数据，只读 |
+| 2 | `int n` | 元素总数，必须是2的幂次 |
+| 3 | `extern __shared__ T temp[]` | 声明动态共享内存数组，大小由启动参数决定 |
+
+### 线程索引初始化
+
+```cuda
+4 |     int thid = threadIdx.x;
+5 |     int offset = 1;
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 4 | `int thid = threadIdx.x` | 获取当前线程在block内的索引(0, 1, 2, ...) |
+| 5 | `int offset = 1` | 初始化偏移量，用于计算树结构中的索引位置 |
+
+### 数据加载阶段
+
+```cuda
+6 |     // 每个线程加载两个元素到 Shared Memory
+7 |     // 注意：这里假设 n 是偶数，且 blockDim.x = n/2
+8 |     int ai = 2 * thid;
+9 |     int bi = 2 * thid + 1;
+10|
+11|     temp[ai] = (ai < n) ? g_idata[ai] : 0;
+12|     temp[bi] = (bi < n) ? g_idata[bi] : 0;
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 8 | `int ai = 2 * thid` | 计算第一个元素的索引(偶数位置: 0, 2, 4, 6...) |
+| 9 | `int bi = 2 * thid + 1` | 计算第二个元素的索引(奇数位置: 1, 3, 5, 7...) |
+| 11 | `temp[ai] = ...` | 从全局内存加载第一个元素到共享内存，边界检查防止越界 |
+| 12 | `temp[bi] = ...` | 从全局内存加载第二个元素到共享内存 |
+
+**加载示意图** (n=8, 4个线程):
+```
+线程0: ai=0, bi=1  → 加载 input[0], input[1]
+线程1: ai=2, bi=3  → 加载 input[2], input[3]
+线程2: ai=4, bi=5  → 加载 input[4], input[5]
+线程3: ai=6, bi=7  → 加载 input[6], input[7]
+```
+
+### Up-Sweep 阶段（归约树构建）
+
+```cuda
+13|     // ========== 1. Up-Sweep 阶段 (归约) ==========
+14|     // 从叶子节点向上归约，构建部分和树
+15|     for (int d = n >> 1; d > 0; d >>= 1) {
+16|         __syncthreads();
+17|         if (thid < d) {
+18|             int ai_local = offset * (2 * thid + 1) - 1;
+19|             int bi_local = offset * (2 * thid + 2) - 1;
+20|             temp[bi_local] += temp[ai_local];
+21|         }
+22|         offset *= 2;
+23|     }
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 15 | `for (int d = n >> 1; ...)` | `n >> 1` = n/2，初始活跃线程数 |
+| 15 | `d > 0; d >>= 1` | 每次迭代d减半，直到为0停止 |
+| 16 | `__syncthreads()` | **关键同步点**：确保所有线程完成上一层的写入 |
+| 17 | `if (thid < d)` | 只有前d个线程参与当前层计算 |
+| 18 | `ai_local = offset * (2*thid + 1) - 1` | 计算左子节点索引，树结构中的位置 |
+| 19 | `bi_local = offset * (2*thid + 2) - 1` | 计算右子节点索引 |
+| 20 | `temp[bi] += temp[ai]` | **核心操作**：右子节点累加左子节点的值 |
+| 22 | `offset *= 2` | 偏移量翻倍，树层数增加 |
+
+**索引计算示例** (n=8):
+```
+迭代1 (d=4, offset=1):
+  thid=0: ai=0, bi=1  → temp[1] += temp[0]
+  thid=1: ai=2, bi=3  → temp[3] += temp[2]
+  thid=2: ai=4, bi=5  → temp[5] += temp[4]
+  thid=3: ai=6, bi=7  → temp[7] += temp[6]
+
+迭代2 (d=2, offset=2):
+  thid=0: ai=1, bi=3  → temp[3] += temp[1]
+  thid=1: ai=5, bi=7  → temp[7] += temp[5]
+
+迭代3 (d=1, offset=4):
+  thid=0: ai=3, bi=7  → temp[7] += temp[3] (根节点=总和)
+```
+
+### 根节点归零
+
+```cuda
+24|     // 将根节点设为 0 (这是排他型扫描的关键)
+25|     if (thid == 0) {
+26|         temp[n - 1] = 0;
+27|     }
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 25 | `if (thid == 0)` | 只有线程0执行，避免竞争条件 |
+| 26 | `temp[n - 1] = 0` | 将根节点(最后一个元素)设为0，这是**排他扫描的关键** |
+
+**为什么归零？**
+```
+Up-Sweep后根节点存储的是总和。
+对于排他扫描，根节点应该表示"之前所有元素的和"，
+而根节点之前没有元素，所以和为0。
+```
+
+### Down-Sweep 阶段（分发树）
+
+```cuda
+28|     // ========== 2. Down-Sweep 阶段 (分发) ==========
+29|     // 自顶向下计算前缀和
+30|     for (int d = 1; d < n; d *= 2) {
+31|         offset >>= 1;
+32|         __syncthreads();
+33|         if (thid < d) {
+34|             int ai_local = offset * (2 * thid + 1) - 1;
+35|             int bi_local = offset * (2 * thid + 2) - 1;
+36|
+37|             // 交换并累加：
+38|             // - ai 位置获得原来的 bi 值（当前前缀和）
+39|             // - bi 位置累加上 ai 的值（传播前缀和）
+40|             T t = temp[ai_local];
+41|             temp[ai_local] = temp[bi_local];
+42|             temp[bi_local] += t;
+43|         }
+44|     }
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 30 | `for (int d = 1; d < n; d *= 2)` | d从1开始，每次翻倍，与Up-Sweep相反 |
+| 31 | `offset >>= 1` | 偏移量减半，从树顶向叶子移动 |
+| 32 | `__syncthreads()` | **关键同步点**：确保上一层完成所有写入 |
+| 33 | `if (thid < d)` | 活跃线程数逐层增加(1, 2, 4, 8...) |
+| 34-35 | `ai_local, bi_local` | 与Up-Sweep相同的索引计算方式 |
+| 40 | `T t = temp[ai]` | **保存**左子节点的值到临时变量t |
+| 41 | `temp[ai] = temp[bi]` | **交换**：左子节点获得右子节点的值(前缀和) |
+| 42 | `temp[bi] += t` | **累加**：右子节点加上原左子节点的值 |
+
+**三行核心代码的执行效果**:
+```
+操作前:  ai = A,  bi = B
+操作后:  ai = B,  bi = B + A
+
+这实现了：
+- ai位置获得"当前层的前缀和"
+- bi位置获得"加上本层左子树后的新前缀和"
+```
+
+### 最终同步与写回
+
+```cuda
+45|     __syncthreads();
+46|
+47|     // 将结果写回 Global Memory
+48|     if (ai < n) g_odata[ai] = temp[ai];
+49|     if (bi < n) g_odata[bi] = temp[bi];
+50| }
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 45 | `__syncthreads()` | **最终同步**：确保所有线程完成Down-Sweep |
+| 48 | `g_odata[ai] = temp[ai]` | 将第一个元素结果写回全局内存 |
+| 49 | `g_odata[bi] = temp[bi]` | 将第二个元素结果写回全局内存 |
+| 50 | `}` | kernel函数结束 |
+
+### 主机端调用函数
+
+```cuda
+51| void blelloch_scan(const float* d_input, float* d_output, int n) {
+52|     // Blelloch 算法需要 n 是 2的幂次
+53|     // 每个线程处理 2 个元素，所以线程数是 n/2
+54|     int threads = n / 2;
+55|     if (threads > 1024) {
+56|         // 如果超过最大线程数，需要分块处理（这里简化处理）
+57|         threads = 1024;
+58|     }
+59|
+60|     // 共享内存大小：n 个元素
+61|     int smem_size = n * sizeof(float);
+62|
+63|     blelloch_scan_kernel<<<1, threads, smem_size>>>(d_output, d_input, n);
+64|
+65|     cudaDeviceSynchronize();
+66| }
+```
+
+| 行 | 代码 | 解释 |
+|---|------|------|
+| 54 | `int threads = n / 2` | 计算线程数，每个线程处理2个元素 |
+| 55-58 | `if (threads > 1024)` | 安全检查，CUDA最大线程数限制 |
+| 61 | `smem_size = n * sizeof(float)` | 计算共享内存大小，n个float |
+| 63 | `<<<1, threads, smem_size>>>` | 启动1个block，指定线程数和共享内存大小 |
+| 65 | `cudaDeviceSynchronize()` | 等待kernel执行完成，确保结果就绪 |
+
+---
+
 ## 局限性
 
 1. **必须是2的幂次**: 算法假设 n 是 2的幂次
