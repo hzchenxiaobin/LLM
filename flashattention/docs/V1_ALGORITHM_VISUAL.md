@@ -15,7 +15,7 @@ flowchart TB
         direction TB
 
         subgraph Step1[步骤1: 加载Q]
-            LoadQ[从HBM加载Q的一行<br/>到寄存器 q_vec[d]]
+            LoadQ["从HBM加载Q的一行到寄存器 q_vec[d]"]
         end
 
         subgraph Step2[步骤2: 循环遍历KV]
@@ -37,7 +37,7 @@ flowchart TB
 
             subgraph InnerStep3[更新输出累加器]
                 LoadV[加载V[k_idx]到寄存器]
-                UpdateO[o_acc = o_acc × exp_prev<br/>         + exp_curr × V[k_idx]]
+                UpdateO["o_acc = o_acc × exp_prev + exp_curr × V[k_idx]"]
             end
 
             LoopEnd{继续循环?}
@@ -126,18 +126,18 @@ flowchart TB
 
         subgraph Block0["Block 0 (64 threads)"]
             direction LR
-            T00["Thread 0<br/>Q[0]"]
-            T01["Thread 1<br/>Q[1]"]
+            T00["Thread 0: Q[0]"]
+            T01["Thread 1: Q[1]"]
             T02["..."]
-            T063["Thread 63<br/>Q[63]"]
+            T063["Thread 63: Q[63]"]
         end
 
         subgraph Block1["Block 1 (64 threads)"]
             direction LR
-            T10["Thread 0<br/>Q[64]"]
-            T11["Thread 1<br/>Q[65]"]
+            T10["Thread 0: Q[64]"]
+            T11["Thread 1: Q[65]"]
             T12["..."]
-            T163["Thread 63<br/>Q[127]"]
+            T163["Thread 63: Q[127]"]
         end
 
         subgraph BlockN["..."]
@@ -148,7 +148,7 @@ flowchart TB
             direction LR
             TL0["Thread 0"]
             TL1["..."]
-            TLX["Thread x<br/>(可能 < 63)"]
+            TLX["Thread x (可能小于63)"]
         end
     end
 
@@ -166,7 +166,7 @@ flowchart TB
 sequenceDiagram
     participant T as Thread tid
     participant HBM as Global Memory
-    participant REG as Registers<br/>(q_vec, o_acc, m, l)
+    participant REG as "Registers (q_vec, o_acc, m, l)"
 
     Note over T,HBM: 初始化阶段
     T->>HBM: 读取 Q[q_row×d + 0:d-1]
@@ -188,7 +188,7 @@ sequenceDiagram
 
         T->>HBM: 读取 V[k_idx×d + 0:d-1]
         HBM->>REG: 临时寄存器
-        T->>REG: o_acc = o_acc × exp_prev<br/>         + exp_curr × V[k_idx]
+        T->>REG: o_acc = o_acc × exp_prev + exp_curr × V[k_idx]
     end
 
     Note over T,HBM: 输出阶段
@@ -205,20 +205,20 @@ sequenceDiagram
 ```mermaid
 flowchart TB
     subgraph Input[输入矩阵]
-        Q["Q: N×d<br/>[每行是一个query向量]"]
-        K["K: N×d<br/>[每行是一个key向量]"]
-        V["V: N×d<br/>[每行是一个value向量]"]
+        Q["Q: N×d (每行是一个query向量)"]
+        K["K: N×d (每行是一个key向量)"]
+        V["V: N×d (每行是一个value向量)"]
     end
 
     subgraph Computation[计算过程]
         direction TB
 
         subgraph Step1[Q @ K^T]
-            S["S = Q×K^T: N×N<br/>注意力分数矩阵<br/>(V1不显式存储)"]
+            S["S = Q×K^T: N×N - 注意力分数矩阵 (V1不显式存储)"]
         end
 
         subgraph Step2[Softmax]
-            P["P = softmax(S): N×N<br/>注意力权重<br/>(V1用online softmax增量计算)"]
+            P["P = softmax(S): N×N - 注意力权重 (V1用online softmax增量计算)"]
         end
 
         subgraph Step3[× V]
@@ -378,7 +378,7 @@ flowchart LR
         Q2[Q: N×d]
         K2[K: N×d]
         V2[V: N×d]
-        REG["寄存器:<br/>q_vec[d]<br/>o_acc[d]<br/>m, l"]
+        REG["寄存器: q_vec[d], o_acc[d], m, l"]
         O2[O: N×d]
 
         Q2 --> REG
