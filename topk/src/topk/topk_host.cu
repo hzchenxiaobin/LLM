@@ -632,3 +632,11 @@ void topk_v5_blackwell(const float* d_input, int N, int K, TopKNode* d_output,
 
     CUDA_CHECK(cudaFree(d_block_tops));
 }
+
+// Include kernel implementations for template instantiation
+// These are included at the end to ensure template definitions are visible
+#include "v1_thread.cu"
+#include "v2_shared_memory.cu"
+#include "v3_warp_shuffle.cu"
+#include "v4_radix_select.cu"
+#include "v5_blackwell.cu"

@@ -1,0 +1,51 @@
+./build/benchmark
+================================================================================
+                   CUDA Scan (Prefix Sum) Performance Benchmark                  
+================================================================================
+
+Device: NVIDIA GeForce RTX 5090
+Compute Capability: 12.0
+Shared Memory per Block: 48 KB
+Max Threads per Block: 1024
+
+Running benchmarks...
+--------------------------------------------------------------------------------
+
+Test Size: N = 256 elements
+--------------------------------------------------------------------------------
+  V1: Hillis-Steele (Naive)            N=   256  Time=  0.0092 ms  BW=  0.22 GB/s  [PASS]
+  V2: Blelloch (Work-Efficient)        N=   256  Time=  0.0089 ms  BW=  0.23 GB/s  [PASS]
+  V3: Bank-Free (No Conflicts)         N=   256  Time=  0.0091 ms  BW=  0.23 GB/s  [PASS]
+  V4: Warp Primitives                  N=   256  Time=  0.0084 ms  BW=  0.24 GB/s  [PASS]
+
+
+Test Size: N = 512 elements
+--------------------------------------------------------------------------------
+  V1: Hillis-Steele (Naive)            N=   512  Time=  0.0088 ms  BW=  0.47 GB/s  [PASS]
+  V2: Blelloch (Work-Efficient)        N=   512  Time=  0.0090 ms  BW=  0.46 GB/s  [PASS]
+  V3: Bank-Free (No Conflicts)         N=   512  Time=  0.0088 ms  BW=  0.46 GB/s  [PASS]
+  V4: Warp Primitives                  N=   512  Time=  0.0081 ms  BW=  0.51 GB/s  [PASS]
+
+
+Test Size: N = 1024 elements
+--------------------------------------------------------------------------------
+  V1: Hillis-Steele (Naive)            N=  1024  Time=  0.0090 ms  BW=  0.91 GB/s  [PASS]
+  V2: Blelloch (Work-Efficient)        N=  1024  Time=  0.0093 ms  BW=  0.88 GB/s  [PASS]
+  V3: Bank-Free (No Conflicts)         N=  1024  Time=  0.0091 ms  BW=  0.90 GB/s  [PASS]
+  V4: Warp Primitives                  N=  1024  Time=  0.0081 ms  BW=  1.01 GB/s  [PASS]
+
+
+Test Size: N = 2048 elements
+--------------------------------------------------------------------------------
+  Mismatch at index 256: got 0.000000, expected 12398.674805 (diff=12398.674805)
+  V4: Warp Primitives                  N=  2048  Time=  0.0081 ms  BW=  2.01 GB/s  [FAIL]
+
+
+Test Size: N = 4096 elements
+--------------------------------------------------------------------------------
+  Mismatch at index 256: got 0.000000, expected 13124.383789 (diff=13124.383789)
+  V4: Warp Primitives                  N=  4096  Time=  0.0082 ms  BW=  4.01 GB/s  [FAIL]
+
+================================================================================
+                              Benchmark Complete                               
+================================================================================

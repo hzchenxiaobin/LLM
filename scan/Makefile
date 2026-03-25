@@ -4,14 +4,14 @@
 NVCC = nvcc
 
 # 编译选项
-# CUDA 12.0 支持的架构：Maxwell (52), Pascal (61), Volta/Turing (70), Ampere (80), Hopper (90)
-# Ada (89) 和 Blackwell (100) 需要更新的 CUDA 版本
+# CUDA 12.0 支持的架构：Maxwell (52), Pascal (61), Volta/Turing (70), Ampere (80), Hopper (90), Blackwell (120)
 NVCC_FLAGS = -O3 -std=c++17 \
     -gencode arch=compute_52,code=sm_52 \
     -gencode arch=compute_61,code=sm_61 \
     -gencode arch=compute_70,code=sm_70 \
     -gencode arch=compute_80,code=sm_80 \
     -gencode arch=compute_90,code=sm_90 \
+    -gencode arch=compute_120,code=sm_120 \
     --use_fast_math
 
 # 包含目录
@@ -33,12 +33,17 @@ BENCHMARK_OBJ = $(BUILD_DIR)/benchmark.o
 # 可执行文件
 TARGET = $(BUILD_DIR)/benchmark
 
-# 默认目标
-all: $(BUILD_DIR) $(TARGET)
+# 默认目标：先清理再编译
+all: clean_build $(TARGET)
 
-# 创建 build 目录
+# 清理并创建 build 目录
+clean_build:
+	@rm -rf $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
+
+# 创建 build 目录（仅当不存在时）
 $(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
+	@mkdir -p $(BUILD_DIR)
 
 # 编译各个版本的 scan 为 relocatable device code
 $(BUILD_DIR)/%.o: src/scan/%.cu | $(BUILD_DIR)
@@ -68,4 +73,4 @@ rebuild: clean all
 debug: NVCC_FLAGS += -g -G -lineinfo
 debug: clean all
 
-.PHONY: all clean run rebuild debug
+.PHONY: all clean clean_build run rebuild debug

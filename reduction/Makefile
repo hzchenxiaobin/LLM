@@ -15,12 +15,12 @@ SRC_DIR = src
 # 源文件
 BENCHMARK_SRC = $(SRC_DIR)/benchmark.cu
 KERNEL_SRCS = $(KERNEL_DIR)/common.cu \
-              $(KERNEL_DIR)/reduce_interleaved.cu \
-              $(KERNEL_DIR)/reduce_strided.cu \
-              $(KERNEL_DIR)/reduce_sequential.cu \
-              $(KERNEL_DIR)/reduce_first_add.cu \
-              $(KERNEL_DIR)/reduce_warp_shuffle.cu \
-              $(KERNEL_DIR)/reduce_vectorized.cu \
+              $(KERNEL_DIR)/reduce_v1_interleaved.cu \
+              $(KERNEL_DIR)/reduce_v2_strided.cu \
+              $(KERNEL_DIR)/reduce_v3_sequential.cu \
+              $(KERNEL_DIR)/reduce_v4_first_add.cu \
+              $(KERNEL_DIR)/reduce_v5_warp_shuffle.cu \
+              $(KERNEL_DIR)/reduce_v6_vectorized.cu \
               $(KERNEL_DIR)/reduce_cub.cu \
               $(KERNEL_DIR)/run_kernel.cu
 

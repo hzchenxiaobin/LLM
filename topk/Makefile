@@ -1,7 +1,7 @@
 # Top-K Benchmark Makefile - Optimized for RTX 5090 (Blackwell)
 
 NVCC := nvcc
-NVCC_FLAGS := -O2 -std=c++17 -Isrc --extended-lambda
+NVCC_FLAGS := -O2 -std=c++17 -Isrc --extended-lambda -rdc=true
 
 GPU_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '.')
 
@@ -16,12 +16,8 @@ ifdef ARCH
 endif
 
 SRC_DIR := src
+# topk_host.cu includes v1-v5 kernel implementations
 SOURCES := $(SRC_DIR)/main.cu \
-           $(SRC_DIR)/topk/v1_thread.cu \
-           $(SRC_DIR)/topk/v2_shared_memory.cu \
-           $(SRC_DIR)/topk/v3_warp_shuffle.cu \
-           $(SRC_DIR)/topk/v4_radix_select.cu \
-           $(SRC_DIR)/topk/v5_blackwell.cu \
            $(SRC_DIR)/topk/topk_host.cu \
            $(SRC_DIR)/benchmark/benchmark.cu
 
