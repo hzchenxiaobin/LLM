@@ -1,13 +1,13 @@
 # CUDA Top-K 算子性能优化教程（面向 RTX 5090）
 
-> 本文档介绍如何在 NVIDIA RTX 5090 (Blackwell 架构) 上高效实现 Batched Top-K 算子。
+> 本文档介绍如何在 NVIDIA RTX 5090 (Blackwell 架构) 上高效实现 1D Top-K 算子。
 
 ## 目录
 
 1. [背景与硬件认知](#0-背景与硬件认知)
-2. [Step 1: 朴素版本 (Thread-per-Row)](#step-1-朴素版本-thread-per-row)
-3. [Step 2: 进阶版本 (Block-per-Row + Shared Memory)](#step-2-进阶版本-block-per-row--shared-memory)
-4. [Step 3: 工业级利器 (Warp-per-Row + Warp Primitives)](#step-3-工业级利器-warp-per-row--warp-primitives)
+2. [Step 1: 朴素版本 (单线程串行)](#step-1-朴素版本-单线程串行)
+3. [Step 2: 进阶版本 (Block级协作 + Shared Memory)](#step-2-进阶版本-block级协作--shared-memory)
+4. [Step 3: 工业级利器 (Warp级协作 + Warp Primitives)](#step-3-工业级利器-warp级协作--warp-primitives)
 5. [Step 4: RTX 5090 专属极致优化](#step-4-rtx-5090--blackwell-专属极致优化)
 6. [总结与路线图](#总结优化路径路线图)
 7. [推荐学习资源](#推荐的下一步学习)
@@ -24,64 +24,54 @@
 | **极高显存带宽** | 通常超过 1.5 TB/s |
 | **庞大 L2 Cache** | 非常适合在 Cache 中复用数据 |
 
-### 问题定义：Batched Top-K
+### 问题定义：1D Top-K
 
-假设输入矩阵维度为 `[BatchSize, N]`，需要在每一行（长度为 `N`）中找出最大的 `K` 个元素及其索引。输出为 `[BatchSize, K]` 的值矩阵和索引矩阵。
+假设输入为一维数组 `[N]`，需要在其中找出最大的 `K` 个元素（只输出值，不输出索引）。输出为 `[K]` 的值数组。
 
 **典型场景**：LLM 推理中的词表采样
 - `N ≈ 32000 ~ 128000`（词表大小）
 - `K ≈ 10 ~ 50`（采样数量）
+- **注意**：本版本只输出 Top-K 值，不输出对应索引
 
 ---
 
-## Step 1: 朴素版本 (Thread-per-Row)
+## Step 1: 朴素版本 (单线程串行)
 
 ### 核心思想
 
-一个线程处理一行。每个线程在寄存器或局部内存中维护大小为 `K` 的数组，遍历 `N` 个元素，执行插入排序。
+使用单个线程串行处理整个数组，在寄存器中维护大小为 `K` 的数组，遍历 `N` 个元素执行插入排序。
 
 ### CUDA 代码实现
 
 ```cuda
-// V1: Thread-per-Row 插入排序
-template <typename T>
-__global__ void topk_v1_kernel(const T* input, T* out_vals, int* out_inds, 
-                               int Batch, int N, int K) {
-    int row = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row >= Batch) return;
+// V1: 单线程串行插入排序 (1D输入，无索引输出)
+__global__ void topk_v1_kernel(const float* input, float* out_vals, int N, int K) {
+    // 只使用线程0处理
+    if (threadIdx.x != 0 || blockIdx.x != 0) return;
 
-    const T* row_input = input + row * N;
-    T* row_out_vals = out_vals + row * K;
-    int* row_out_inds = out_inds + row * K;
-
-    // 初始化 Top-K 数组 (存储在寄存器或 Local Memory)
-    T top_vals[128];  // 假设 K 最大不超过 128
-    int top_inds[128];
+    // 初始化 Top-K 数组 (存储在寄存器中)
+    float top_vals[32];  // 假设 K 最大不超过 32
     for (int i = 0; i < K; ++i) {
         top_vals[i] = -INFINITY;
-        top_inds[i] = -1;
     }
 
-    // 遍历该行的 N 个元素
+    // 串行遍历 N 个元素
     for (int i = 0; i < N; ++i) {
-        T val = row_input[i];
+        float val = input[i];
         // 如果比当前 Top-K 中的最小值大，则插入
         if (val > top_vals[K - 1]) {
             int pos = K - 1;
             while (pos > 0 && val > top_vals[pos - 1]) {
                 top_vals[pos] = top_vals[pos - 1];
-                top_inds[pos] = top_inds[pos - 1];
                 pos--;
             }
             top_vals[pos] = val;
-            top_inds[pos] = i;
         }
     }
 
     // 写回 Global Memory
     for (int i = 0; i < K; ++i) {
-        row_out_vals[i] = top_vals[i];
-        row_out_inds[i] = top_inds[i];
+        out_vals[i] = top_vals[i];
     }
 }
 ```
@@ -89,13 +79,9 @@ __global__ void topk_v1_kernel(const T* input, T* out_vals, int* out_inds,
 ### 性能痛点分析
 
 - **寄存器溢出 (Register Spilling)**
-  - 当 `K` 稍大（如 64）时，`top_vals` 和 `top_inds` 消耗大量寄存器
+  - 当 `K` 稍大（如 64）时，`top_vals` 消耗大量寄存器
   - 编译器会将它们溢出到 Local Memory（即 Global Memory 的一部分）
   - **后果**：性能暴跌，RTX 5090 沦为计算器
-
-- **非合并访存 (Uncoalesced Memory Access)**
-  - 连续线程读取同一 `i` 时，访问的是跨行数据 `row_input[i]`
-  - 这种读法对显存带宽极不友好
 
 - **算力闲置**
   - 当 `N` 很大时，单个线程串行处理太慢
@@ -103,13 +89,13 @@ __global__ void topk_v1_kernel(const T* input, T* out_vals, int* out_inds,
 
 ---
 
-## Step 2: 进阶版本 (Block-per-Row + Shared Memory)
+## Step 2: 进阶版本 (Block级协作 + Shared Memory)
 
 ### 核心思想
 
-既然一个线程处理一行太慢，就用一个 **Block** 处理一行（或几行）。
+用一个 **Block** 内的所有线程协作处理整个数组。
 
-每个线程负责读取该行不同部分（Grid-Stride Loop），维护自己的 Local Top-K，最后通过 **Shared Memory** 进行 Block 级别规约 (Reduction)。
+每个线程负责读取不同部分（Grid-Stride Loop），维护自己的 Local Top-K，最后通过 **Shared Memory** 进行 Block 级别规约 (Reduction)。
 
 ### 并行策略
 
@@ -135,7 +121,7 @@ __global__ void topk_v1_kernel(const T* input, T* out_vals, int* out_inds,
 
 ---
 
-## Step 3: 工业级利器 (Warp-per-Row + Warp Primitives)
+## Step 3: 工业级利器 (Warp级协作 + Warp Primitives)
 
 ### 核心思想
 
@@ -143,31 +129,29 @@ __global__ void topk_v1_kernel(const T* input, T* out_vals, int* out_inds,
 
 **关键洞察**：Warp（32 个线程）是 GPU 调度的最小单位，Warp 内线程同步是**隐式且极快**的。
 
-**业界最常用策略**：一个 **Warp** 处理一行，使用 CUDA 的 Warp 级洗牌指令（`__shfl_down_sync`, `__shfl_sync`）直接在寄存器层面交换数据，**彻底绕开 Shared Memory**！
+**业界最常用策略**：一个 **Warp** 处理整个数组，使用 CUDA 的 Warp 级洗牌指令（`__shfl_down_sync`, `__shfl_sync`）直接在寄存器层面交换数据，**彻底绕开 Shared Memory**！
 
 ### 核心操作：Warp 规约 (Warp Reduce)
 
 ```cuda
 // Warp 级别找最大值示例
-__inline__ __device__ void warp_reduce_max(float& val, int& idx) {
+__inline__ __device__ void warp_reduce_max(float& val) {
     #pragma unroll
     for (int offset = 16; offset > 0; offset /= 2) {
         float other_val = __shfl_down_sync(0xffffffff, val, offset);
-        int other_idx = __shfl_down_sync(0xffffffff, idx, offset);
         if (other_val > val) {
             val = other_val;
-            idx = other_idx;
         }
     }
 }
 ```
 
-### Warp-per-Row Top-K 流程
+### Warp-per-Array Top-K 流程
 
-1. 分配一个 Warp（32 threads）处理一行
+1. 使用 1 个 Warp（32 threads）处理整个数组
 2. 每个线程串行/循环读取数据（每次读 32 个连续元素，完美合并访存），维护大小为 `K` 的寄存器数组（Local Top-K）
 3. 数据读完后，Warp 内 32 个线程共有 `32 × K` 个候选值
-4. 使用基于 `__shfl_sync` 的归并网络（Bitonic Merge Network）或多次 Warp Reduce，选出最终的 `K` 个最大值
+4. 使用基于 `__shfl_sync` 的归并网络，选出最终的 `K` 个最大值
 
 ### 优点
 
@@ -176,33 +160,24 @@ __inline__ __device__ void warp_reduce_max(float& val, int& idx) {
 
 ---
 
-## Step 4: Radix Select 优化策略 (K > 32 场景)
+## Step 4: Radix Select 优化策略
 
-当 `K > 32` 时，Warp级别的寄存器空间不足以存储完整的Top-K数组。此时需要引入**Radix-Style**的选择算法。
+V4版本采用**Radix-Style**的选择策略，是V3 Warp-per-Array的扩展版本。
 
 ### 核心思想
 
 借鉴**QuickSelect**和**Radix Sort**的思想，通过数值的二进制表示逐层筛选：
 
 1. **粗筛选 (Coarse Selection)**：每个线程先独立收集一个较大的候选集
-2. **位分析 (Bit-wise Analysis)**：利用`float_to_sortable_uint`将浮点数转为可排序的整数键
-3. **逐层归约 (Hierarchical Reduction)**：通过Warp/Block级别的规约，逐步精确到Top-K
+2. **分层归约 (Hierarchical Reduction)**：通过Warp/Block级别的规约，逐步精确到Top-K
 
 ### CUDA代码亮点
 
 ```cuda
-// 浮点数键值转换（关键技巧）
-__device__ __inline__ uint32_t float_to_sortable_uint(float val) {
-    uint32_t u = __float_as_uint(val);
-    // 正数：符号位0，保持原值
-    // 负数：符号位1，按位取反（-0.1 > -1.0）
-    return (u & 0x80000000) ? (~u) : (u | 0x80000000);
-}
-
 // 两阶段算法
 // 阶段1：每个线程粗筛（Local Top-K）
 for (int i = lane_id; i < N; i += WARP_SIZE) {
-    radix_insert_topk(local_vals, local_inds, K, row_input[i], i);
+    radix_insert_topk(local_vals, K, input[i]);
 }
 
 // 阶段2：Warp/Block级别精排
@@ -215,26 +190,26 @@ for (int k = 0; k < K; ++k) {
 
 ### 与V3的区别
 
-| 特性 | V3 Warp-per-Row | V4 Radix Select |
-|------|-----------------|-----------------|
-| **适用K** | K ≤ 32 | K > 32 (或更大) |
+| 特性 | V3 Warp-per-Array | V4 Radix Select |
+|------|-------------------|-----------------|
+| **适用K** | K ≤ 32 | K ≤ 32 (或更大) |
 | **存储** | 纯寄存器 | 寄存器 + Shared Memory |
 | **同步** | 无 `__syncthreads()` | 需要Block同步 |
 | **算法** | 插入排序 + Warp归约 | 粗筛 + 分层选择 |
-| **优势** | 极致低延迟 | 支持更大K值，更稳定 |
+| **优势** | 极致低延迟 | 更灵活，支持更大K值 |
 
 ---
 
 ## Step 5: RTX 5090 / Blackwell 专属极致优化
 
-当你实现到 Warp-per-Row，已超过 90% 的初学者。要完全榨干 RTX 5090，考虑以下前沿优化：
+当你实现到 Warp-per-Array，已超过 90% 的初学者。要完全榨干 RTX 5090，考虑以下前沿优化：
 
 ### 1. 向量化访存 (Vectorized Memory Access)
 
 不要一次读一个 `float`，使用 `float4`（128-bit 访存）一次性读取 4 个元素，减少内存事务数量。
 
 ```cuda
-const float4* vec_input = reinterpret_cast<const float4*>(row_input);
+const float4* vec_input = reinterpret_cast<const float4*>(input);
 float4 data = vec_input[tid];  // 一次取 4 个 float
 ```
 
@@ -246,7 +221,7 @@ RTX 5090 对 FP8 和 BF16 有极其恐怖的吞吐量。将输入转为 `__nv_bf
 
 Hopper 和 Blackwell 架构支持 **TMA (Tensor Memory Accelerator)**，允许 SM 绕过寄存器直接将数据从 Global Memory 搬运到 Shared Memory。
 
-当 `K` 较大（如 `K = 1024`），Warp-per-Row 寄存器不够用时，必须回退到 Shared Memory。此时使用 `cuda::memcpy_async` 可以将计算和下一轮访存**流水线化**，掩盖延迟。
+当 `K` 较大（如 `K = 1024`），Warp-per-Array 寄存器不够用时，必须回退到 Shared Memory。此时使用 `cuda::memcpy_async` 可以将计算和下一轮访存**流水线化**，掩盖延迟。
 
 ---
 
@@ -256,24 +231,49 @@ Hopper 和 Blackwell 架构支持 **TMA (Tensor Memory Accelerator)**，允许 S
 
 | K 的范围 | 推荐策略 | 实现版本 |
 |----------|----------|----------|
-| `K ≤ 32` | **Warp-per-Row + Warp Shuffle Primitives** ⭐ 最优！ | V3 |
+| `K ≤ 32` | **Warp-per-Array + Warp Shuffle Primitives** ⭐ 最优！ | V3/V4 |
 | `32 < K ≤ 256` | **Radix Select + Block Shared Memory** ⭐ 推荐 | V4 |
-| `32 < K ≤ 256` | Block-per-Row + Shared Memory + Bitonic Sort | V2 |
 | `K > 256` | 多 Pass 的 Radix Sort（如 CUB 库的 `cub::DeviceRadixSort`） | CUB |
 
 ### 版本对比速查
 
 | 版本 | 核心思想 | 特点 | 适用场景 |
 |------|----------|------|----------|
-| **V1** | Thread-per-Row + 插入排序 | 实现简单，但寄存器易溢出 | 学习/调试 |
-| **V2** | Block-per-Row + Shared Memory | 合并访存好，但有同步开销 | 通用场景 |
-| **V3** | Warp-per-Row + Warp Primitives | 无同步，极致性能 | **K ≤ 32，生产首选** |
+| **V1** | 单线程串行 + 插入排序 | 实现简单，但性能差 | 学习/调试 |
+| **V2** | Block级协作 + Shared Memory | 合并访存好，但有同步开销 | 通用场景 |
+| **V3** | Warp级协作 + Warp Primitives | 无同步，极致性能 | **K ≤ 32，生产首选** |
 | **V4** | Radix Select + 分层归约 | 支持大K，稳定性好 | **K > 32，大K场景** |
 
 ### 2. 通用优化原则
 
 - **优化访存**：确保所有 Global Memory 读写必须是**合并的 (Coalesced)**，引入 `float4`
 - **减少分支**：插入排序或归并时，尽量使用无分支代码或 `#pragma unroll`，防止指令流水线被打断
+
+---
+
+## Kernel 调用方式（当前版本）
+
+所有版本均已简化为 **1D输入，无Batch轴，只输出值** 的形式：
+
+```cuda
+// V1: 单线程串行
+topk_v1_kernel<<<1, 1>>>(input, out_vals, N, K);
+
+// V2: Block级并行
+topk_v2_kernel<<<1, 256>>>(input, out_vals, N, K);
+
+// V3: Warp级并行
+topk_v3_kernel<<<1, 32>>>(input, out_vals, N, K);
+
+// V4: 小数据量(N <= 1024)
+topk_v4_warp_kernel<<<1, 32>>>(input, out_vals, N, K);
+
+// V4: 大数据量(N > 1024)
+int block_size = 256;
+int num_warps = block_size / 32;
+size_t shared_mem = num_warps * K * sizeof(float);
+topk_v4_kernel<<<1, block_size, shared_mem>>>(input, out_vals, N, K);
+```
 
 ---
 
@@ -288,4 +288,5 @@ Hopper 和 Blackwell 架构支持 **TMA (Tensor Memory Accelerator)**，允许 S
 
 ---
 
-*文档版本: 1.1 | 适用架构: NVIDIA Blackwell (RTX 5090)*
+*文档版本: 2.0 | 适用架构: NVIDIA Blackwell (RTX 5090)*
+*更新说明: 已修改为1D输入，无Batch轴，只输出值（无索引）*

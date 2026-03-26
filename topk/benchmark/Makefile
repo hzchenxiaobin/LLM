@@ -26,7 +26,8 @@ SRC = topk_benchmark.cu
 DEPS = $(INC_DIR)/topk_common.h \
        $(KERNEL_DIR)/topk_v1_thread_per_row.cu \
        $(KERNEL_DIR)/topk_v2_block_shared_memory.cu \
-       $(KERNEL_DIR)/topk_v3_warp_shuffle.cu
+       $(KERNEL_DIR)/topk_v3_warp_shuffle.cu \
+       $(KERNEL_DIR)/topk_v4_radix_select.cu
 
 .PHONY: all clean run run-quick run-llm run-compare
 
