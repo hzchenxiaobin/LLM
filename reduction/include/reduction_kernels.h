@@ -42,6 +42,33 @@ __global__ void reduce_v5(float *g_idata, float *g_odata, unsigned int n);
 __global__ void reduce_v6(float *g_idata, float *g_odata, unsigned int n);
 
 // ============================================
+// ReduceMax - 基于V5 Warp Shuffle架构
+// ============================================
+__inline__ __device__ float warpReduceMax(float val, int idx, int* out_idx);
+__inline__ __device__ float warpReduceMaxOnly(float val);
+
+__global__ void reduceMax_v5(
+    const float *g_idata, 
+    float *g_maxval, 
+    int *g_maxidx,
+    unsigned int n
+);
+
+__global__ void reduceMax_v5_multiblock(
+    const float *g_idata, 
+    float *g_maxval, 
+    int *g_maxidx,
+    unsigned int n
+);
+
+__global__ void reduceMax_v5_quick(
+    const float *g_idata, 
+    float *g_maxval, 
+    int *g_maxidx,
+    unsigned int n
+);
+
+// ============================================
 // CUB 库基准版本
 // ============================================
 void reduce_cub(float *d_in, float *d_out, unsigned int n,
