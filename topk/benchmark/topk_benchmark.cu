@@ -11,6 +11,7 @@
 #include "../src/topk_v1_thread_per_row.cu"
 #include "../src/topk_v2_block_shared_memory.cu"
 #include "../src/topk_v3_warp_shuffle.cu"
+#include "../src/topk_v4_radix_select.cu"
 
 // ==========================================
 // CPU Baseline: 供正确性验证
@@ -209,6 +210,12 @@ void run_test_case(const TestCase& tc) {
     dim3 block3(32, 4);
     dim3 grid3((Batch + block3.y - 1) / block3.y);
     benchmark(topk_v3_kernel, "V3_Warp", grid3, block3,
+              d_in, d_out_vals, d_out_inds, h_out_vals_cpu.data(), Batch, N, K);
+
+    // --- Benchmark V4: Radix Select ---
+    dim3 block4(256);
+    dim3 grid4(Batch);
+    benchmark(topk_v4_kernel, "V4_RadixSelect", grid4, block4,
               d_in, d_out_vals, d_out_inds, h_out_vals_cpu.data(), Batch, N, K);
 
     CHECK_CUDA(cudaFree(d_in));

@@ -176,7 +176,56 @@ __inline__ __device__ void warp_reduce_max(float& val, int& idx) {
 
 ---
 
-## Step 4: RTX 5090 / Blackwell 专属极致优化
+## Step 4: Radix Select 优化策略 (K > 32 场景)
+
+当 `K > 32` 时，Warp级别的寄存器空间不足以存储完整的Top-K数组。此时需要引入**Radix-Style**的选择算法。
+
+### 核心思想
+
+借鉴**QuickSelect**和**Radix Sort**的思想，通过数值的二进制表示逐层筛选：
+
+1. **粗筛选 (Coarse Selection)**：每个线程先独立收集一个较大的候选集
+2. **位分析 (Bit-wise Analysis)**：利用`float_to_sortable_uint`将浮点数转为可排序的整数键
+3. **逐层归约 (Hierarchical Reduction)**：通过Warp/Block级别的规约，逐步精确到Top-K
+
+### CUDA代码亮点
+
+```cuda
+// 浮点数键值转换（关键技巧）
+__device__ __inline__ uint32_t float_to_sortable_uint(float val) {
+    uint32_t u = __float_as_uint(val);
+    // 正数：符号位0，保持原值
+    // 负数：符号位1，按位取反（-0.1 > -1.0）
+    return (u & 0x80000000) ? (~u) : (u | 0x80000000);
+}
+
+// 两阶段算法
+// 阶段1：每个线程粗筛（Local Top-K）
+for (int i = lane_id; i < N; i += WARP_SIZE) {
+    radix_insert_topk(local_vals, local_inds, K, row_input[i], i);
+}
+
+// 阶段2：Warp/Block级别精排
+for (int k = 0; k < K; ++k) {
+    // 使用warp shuffle找出当前全局最大值
+    warp_reduce_max(...);
+    // 获胜线程推进指针，下一轮找次大值
+}
+```
+
+### 与V3的区别
+
+| 特性 | V3 Warp-per-Row | V4 Radix Select |
+|------|-----------------|-----------------|
+| **适用K** | K ≤ 32 | K > 32 (或更大) |
+| **存储** | 纯寄存器 | 寄存器 + Shared Memory |
+| **同步** | 无 `__syncthreads()` | 需要Block同步 |
+| **算法** | 插入排序 + Warp归约 | 粗筛 + 分层选择 |
+| **优势** | 极致低延迟 | 支持更大K值，更稳定 |
+
+---
+
+## Step 5: RTX 5090 / Blackwell 专属极致优化
 
 当你实现到 Warp-per-Row，已超过 90% 的初学者。要完全榨干 RTX 5090，考虑以下前沿优化：
 
@@ -205,11 +254,21 @@ Hopper 和 Blackwell 架构支持 **TMA (Tensor Memory Accelerator)**，允许 S
 
 ### 1. 根据 K 的大小选择策略
 
-| K 的范围 | 推荐策略 |
-|----------|----------|
-| `K ≤ 32` | **Warp-per-Row + Warp Shuffle Primitives** ⭐ 最优！ |
-| `32 < K ≤ 256` | Block-per-Row + Shared Memory + Bitonic Sort |
-| `K > 256` | 多 Pass 的 Radix Sort（如 CUB 库的 `cub::DeviceRadixSort`） |
+| K 的范围 | 推荐策略 | 实现版本 |
+|----------|----------|----------|
+| `K ≤ 32` | **Warp-per-Row + Warp Shuffle Primitives** ⭐ 最优！ | V3 |
+| `32 < K ≤ 256` | **Radix Select + Block Shared Memory** ⭐ 推荐 | V4 |
+| `32 < K ≤ 256` | Block-per-Row + Shared Memory + Bitonic Sort | V2 |
+| `K > 256` | 多 Pass 的 Radix Sort（如 CUB 库的 `cub::DeviceRadixSort`） | CUB |
+
+### 版本对比速查
+
+| 版本 | 核心思想 | 特点 | 适用场景 |
+|------|----------|------|----------|
+| **V1** | Thread-per-Row + 插入排序 | 实现简单，但寄存器易溢出 | 学习/调试 |
+| **V2** | Block-per-Row + Shared Memory | 合并访存好，但有同步开销 | 通用场景 |
+| **V3** | Warp-per-Row + Warp Primitives | 无同步，极致性能 | **K ≤ 32，生产首选** |
+| **V4** | Radix Select + 分层归约 | 支持大K，稳定性好 | **K > 32，大K场景** |
 
 ### 2. 通用优化原则
 
@@ -229,4 +288,4 @@ Hopper 和 Blackwell 架构支持 **TMA (Tensor Memory Accelerator)**，允许 S
 
 ---
 
-*文档版本: 1.0 | 适用架构: NVIDIA Blackwell (RTX 5090)*
+*文档版本: 1.1 | 适用架构: NVIDIA Blackwell (RTX 5090)*

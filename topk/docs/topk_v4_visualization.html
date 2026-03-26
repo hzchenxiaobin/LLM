@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TopK V4: Radix Select 算法可视化</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #12122a;
+            --bg-tertiary: #1a1a3e;
+            --accent-cyan: #00f5d4;
+            --accent-green: #00e676;
+            --accent-purple: #b967ff;
+            --accent-orange: #ff9f43;
+            --accent-pink: #ff6b9d;
+            --accent-yellow: #ffd93d;
+            --text-primary: #e8e8ff;
+            --text-secondary: #a0a0c0;
+            --text-muted: #6a6a8a;
+            --border-color: #2a2a5a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-bottom: 2px solid var(--accent-purple);
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .section h2 {
+            color: var(--accent-purple);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .flow-diagram {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .phase {
+            text-align: center;
+            flex: 1;
+        }
+
+        .phase-box {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 0.5rem;
+        }
+
+        .phase-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        .phase-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .arrow {
+            font-size: 2rem;
+            color: var(--accent-cyan);
+            margin: 0 1rem;
+        }
+
+        .warp-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .lane {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.75rem;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+        }
+
+        .lane.active {
+            border-color: var(--accent-green);
+            background: rgba(0, 230, 118, 0.1);
+        }
+
+        .lane-id {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .topk-array {
+            display: flex;
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+            justify-content: center;
+        }
+
+        .topk-slot {
+            width: 30px;
+            height: 25px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+        }
+
+        .topk-slot.filled {
+            background: var(--accent-purple);
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .comparison-table th {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .comparison-table tr:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .code-block {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-left: 3px solid var(--accent-purple);
+        }
+
+        .code-keyword { color: var(--accent-pink); }
+        .code-type { color: var(--accent-cyan); }
+        .code-func { color: var(--accent-green); }
+        .code-comment { color: var(--text-muted); }
+        .code-string { color: var(--accent-yellow); }
+
+        .legend {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-purple), var(--accent-pink));
+            border: none;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .highlight-box {
+            background: rgba(185, 103, 255, 0.1);
+            border: 1px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .algorithm-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--accent-purple);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>TopK V4: Radix Select</h1>
+        <p>基于基数选择的高效 Top-K 算法 | 专为 K > 32 场景优化</p>
+    </div>
+
+    <div class="container">
+        <!-- 算法流程图 -->
+        <div class="section">
+            <h2>📊 算法流程</h2>
+            <div class="flow-diagram">
+                <div class="phase">
+                    <div class="phase-box">
+                        <div class="phase-title">Phase 1</div>
+                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">粗筛选</div>
+                    </div>
+                    <div class="phase-desc">
+                        每个线程独立收集<br>
+                        使用插入排序维护 Local Top-K
+                    </div>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="phase">
+                    <div class="phase-box">
+                        <div class="phase-title">Phase 2</div>
+                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">精排序</div>
+                    </div>
+                    <div class="phase-desc">
+                        Warp/Block 级别归约<br>
+                        逐轮"选举"出全局 Top-K
+                    </div>
+                </div>
+                <div class="arrow">➜</div>
+                <div class="phase">
+                    <div class="phase-box">
+                        <div class="phase-title">Output</div>
+                        <div style="font-size: 0.9rem; margin-top: 0.5rem;">Top-K 结果</div>
+                    </div>
+                    <div class="phase-desc">
+                        输出排序后的 K 个最大值<br>
+                        及其原始索引
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Warp 并行可视化 -->
+        <div class="section">
+            <h2>🔄 Warp 级别并行 (K ≤ 32)</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 1rem;">
+                每个 Warp (32线程) 处理一行数据，每个线程维护 K 个候选值
+            </p>
+
+            <div class="warp-grid">
+                <div class="lane active">
+                    <div class="lane-id">Lane 0</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.95</div>
+                        <div class="topk-slot filled">0.87</div>
+                        <div class="topk-slot filled">0.72</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 1</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.91</div>
+                        <div class="topk-slot filled">0.84</div>
+                        <div class="topk-slot">-∞</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 2</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.89</div>
+                        <div class="topk-slot filled">0.78</div>
+                        <div class="topk-slot filled">0.65</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 3</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.93</div>
+                        <div class="topk-slot filled">0.81</div>
+                        <div class="topk-slot">-∞</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 4</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.88</div>
+                        <div class="topk-slot filled">0.76</div>
+                        <div class="topk-slot">-∞</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 5</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.90</div>
+                        <div class="topk-slot filled">0.82</div>
+                        <div class="topk-slot filled">0.71</div>
+                    </div>
+                </div>
+                <div class="lane active">
+                    <div class="lane-id">Lane 6</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.96</div>
+                        <div class="topk-slot filled">0.85</div>
+                        <div class="topk-slot">-∞</div>
+                    </div>
+                </div>
+                <div class="lane">
+                    <div class="lane-id">Lane 7</div>
+                    <div class="topk-array">
+                        <div class="topk-slot filled">0.86</div>
+                        <div class="topk-slot filled">0.74</div>
+                        <div class="topk-slot">-∞</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--accent-green);"></div>
+                    <span>当前正在归约</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--accent-purple);"></div>
+                    <span>已填充候选值</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: var(--bg-primary);"></div>
+                    <span>未填充 (-∞)</span>
+                </div>
+            </div>
+
+            <div class="highlight-box">
+                <strong>💡 关键洞察：</strong>
+                不是一次性排序所有 32×K 个候选，而是逐轮"选举"找最大值。
+                获胜线程移除已输出的值，下一轮自动找次大值。
+            </div>
+        </div>
+
+        <!-- 版本对比 -->
+        <div class="section">
+            <h2>📋 版本对比</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>版本</th>
+                        <th>适用 K 范围</th>
+                        <th>存储</th>
+                        <th>同步开销</th>
+                        <th>核心优势</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>V3 Warp-per-Row</td>
+                        <td>K ≤ 32</td>
+                        <td>纯寄存器</td>
+                        <td>无 __syncthreads()</td>
+                        <td>极致低延迟，生产首选</td>
+                    </tr>
+                    <tr style="background: rgba(185, 103, 255, 0.05);">
+                        <td><strong>V4 Radix Select</strong></td>
+                        <td><strong>K > 32</strong></td>
+                        <td>寄存器 + Shared Memory</td>
+                        <td>Block 同步</td>
+                        <td>支持大K，稳定性好</td>
+                    </tr>
+                    <tr>
+                        <td>V2 Block-per-Row</td>
+                        <td>通用</td>
+                        <td>Shared Memory</td>
+                        <td>Block 同步</td>
+                        <td>实现简单，合并访存好</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- 核心代码 -->
+        <div class="section">
+            <h2>💻 核心代码</h2>
+
+            <h3 style="color: var(--text-secondary); margin: 1rem 0;">1. 浮点数键值转换</h3>
+            <div class="code-block">
+<span class="code-comment">// 将 float 转为可排序的 uint32</span>
+<span class="code-keyword">__device__ __inline__</span> <span class="code-type">uint32_t</span> <span class="code-func">float_to_sortable_uint</span>(<span class="code-type">float</span> val) {
+    <span class="code-type">uint32_t</span> u = <span class="code-func">__float_as_uint</span>(val);
+    <span class="code-comment">// 正数：符号位0，转为 1xxx (大值)</span>
+    <span class="code-comment">// 负数：符号位1，按位取反使得 -0.1 > -1.0</span>
+    <span class="code-keyword">return</span> (u & <span class="code-string">0x80000000</span>) ? (~u) : (u | <span class="code-string">0x80000000</span>);
+}
+            </div>
+
+            <h3 style="color: var(--text-secondary); margin: 1rem 0;">2. Warp Shuffle Tree Reduction</h3>
+            <div class="code-block">
+<span class="code-comment">// 5轮比较找出32线程中的最大值</span>
+<span class="code-keyword">#pragma unroll</span>
+<span class="code-keyword">for</span> (<span class="code-type">int</span> offset = <span class="code-string">16</span>; offset > <span class="code-string">0</span>; offset /= <span class="code-string">2</span>) {
+    <span class="code-type">float</span> other_val = <span class="code-func">__shfl_down_sync</span>(<span class="code-string">0xffffffff</span>, candidate_val, offset);
+    <span class="code-type">int</span> other_idx = <span class="code-func">__shfl_down_sync</span>(<span class="code-string">0xffffffff</span>, candidate_idx, offset);
+
+    <span class="code-keyword">if</span> (other_val > candidate_val) {
+        candidate_val = other_val;
+        candidate_idx = other_idx;
+    }
+}
+            </div>
+
+            <h3 style="color: var(--text-secondary); margin: 1rem 0;">3. 两阶段算法</h3>
+            <div class="code-block">
+<span class="code-comment">// Phase 1: 粗筛选 - 每个线程收集候选</span>
+<span class="code-keyword">for</span> (<span class="code-type">int</span> i = lane_id; i < N; i += <span class="code-string">32</span>) {
+    <span class="code-func">radix_insert_topk</span>(local_vals, local_inds, K, row_input[i], i);
+}
+
+<span class="code-comment">// Phase 2: 精排序 - Warp归约逐轮选举</span>
+<span class="code-keyword">for</span> (<span class="code-type">int</span> k = <span class="code-string">0</span>; k < K; ++k) {
+    <span class="code-type">float</span> max_val = <span class="code-func">warp_reduce_max</span>(...);  <span class="code-comment">// 找当前最大</span>
+    <span class="code-keyword">if</span> (lane_id == <span class="code-string">0</span>) row_out_vals[k] = max_val;  <span class="code-comment">// 输出</span>
+    <span class="code-keyword">if</span> (my_val == max_val) local_ptr++;  <span class="code-comment">// 获胜者前进</span>
+}
+            </div>
+        </div>
+
+        <!-- 使用建议 -->
+        <div class="section">
+            <h2>🎯 使用建议</h2>
+            <div class="algorithm-steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div>
+                        <strong>K ≤ 32</strong>
+                        <p style="color: var(--text-secondary); margin-top: 0.25rem;">
+                            使用 V4 Warp Kernel，无需 Shared Memory，极致性能
+                        </p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div>
+                        <strong>K > 32</strong>
+                        <p style="color: var(--text-secondary); margin-top: 0.25rem;">
+                            使用 V4 Block Kernel，Shared Memory 辅助，支持更大 K 值
+                        </p>
+                    </div>
+                </div>
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div>
+                        <strong>K > 256</strong>
+                        <p style="color: var(--text-secondary); margin-top: 0.25rem;">
+                            考虑多 Pass 策略或 CUB 库的 BlockRadixSort
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
