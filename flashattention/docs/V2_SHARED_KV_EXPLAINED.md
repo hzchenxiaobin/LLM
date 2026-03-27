@@ -134,7 +134,7 @@ flowchart TB
         Start[开始]
 
         subgraph Init[初始化]
-            AllocReg[分配寄存器<br/>q_vec[128], o_acc[128]<br/>m=-∞, l=0]
+            AllocReg["分配寄存器<br/>q_vec[128], o_acc[128]<br/>m=-∞, l=0"]
             LoadQ[从全局内存加载Q的一行]
         end
 
@@ -150,9 +150,9 @@ flowchart TB
 
             subgraph ComputeTile[计算Tile]
                 InnerLoop{for b=0 to 63}
-                Dot[计算qk = dot(q_vec, K_tile[b])]
+                Dot["计算qk = dot(q_vec, K_tile[b])"]
                 OnlineSoftmax[Online Softmax更新]
-                UpdateO[o_acc += softmax_weight × V_tile[b]]
+                UpdateO["o_acc += softmax_weight × V_tile[b]"]
             end
 
             Sync2[__syncthreads]
@@ -359,8 +359,8 @@ flowchart TB
             Reg0[线程0寄存器<br/>q_vec, o_acc]
             Reg63[线程63寄存器<br/>q_vec, o_acc]
 
-            LoadQ0[加载Q[0]]
-            LoadQ63[加载Q[63]]
+            LoadQ0["加载Q[0]"]
+            LoadQ63["加载Q[63]"]
 
             Calc0[计算64个qk值<br/>使用K_tile]
             Calc63[计算64个qk值<br/>使用K_tile]
