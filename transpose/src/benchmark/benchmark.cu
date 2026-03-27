@@ -50,9 +50,9 @@ private:
 // 测试单个转置实现
 BenchmarkResult benchmark_transpose(
     const std::string& name,
-    void (*transpose_func)(const float*, float*, int, cudaStream_t),
+    void (*transpose_func)(const float*, float*, int, int, cudaStream_t),
     const float *d_A, float *d_B, float *h_A, float *h_B,
-    int N, int warmup_runs, int benchmark_runs
+    int M, int N, int warmup_runs, int benchmark_runs
 ) {
     BenchmarkResult result;
     result.name = name;
@@ -62,7 +62,7 @@ BenchmarkResult benchmark_transpose(
 
     // Warmup
     for (int i = 0; i < warmup_runs; i++) {
-        transpose_func(d_A, d_B, N, 0);
+        transpose_func(d_A, d_B, M, N, 0);
     }
     cudaDeviceSynchronize();
 
@@ -71,7 +71,7 @@ BenchmarkResult benchmark_transpose(
 
     for (int i = 0; i < benchmark_runs; i++) {
         timer.start();
-        transpose_func(d_A, d_B, N, 0);
+        transpose_func(d_A, d_B, M, N, 0);
         timer.stop();
 
         float ms = timer.elapsed_ms();
@@ -83,12 +83,13 @@ BenchmarkResult benchmark_transpose(
     result.min_time_ms = min_ms;
     result.max_time_ms = max_ms;
     result.avg_time_ms = sum_ms / benchmark_runs;
-    result.effective_bw_gbps = compute_effective_bandwidth_ms(result.avg_time_ms, N);
+    result.effective_bw_gbps = compute_effective_bandwidth_ms(result.avg_time_ms, M, N);
     result.efficiency = result.effective_bw_gbps / result.theoretical_bw_gbps * 100.0f;
 
     // 验证结果
-    cudaMemcpy(h_B, d_B, N * N * sizeof(float), cudaMemcpyDeviceToHost);
-    result.verified = verify_transpose(h_A, h_B, N);
+    size_t size_B = N * M * sizeof(float);
+    cudaMemcpy(h_B, d_B, size_B, cudaMemcpyDeviceToHost);
+    result.verified = verify_transpose(h_A, h_B, M, N);
 
     return result;
 }
@@ -140,17 +141,19 @@ void print_performance_comparison(const std::vector<BenchmarkResult>& results) {
 }
 
 // 运行完整的基准测试套件
-void run_full_benchmark(int N, int warmup_runs, int benchmark_runs) {
+void run_full_benchmark(int M, int N, int warmup_runs, int benchmark_runs) {
     printf("\n");
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    printf("  Running Benchmark: N = %d, Warmup = %d, Runs = %d\n", N, warmup_runs, benchmark_runs);
-    printf("  Matrix Size: %d x %d = %.2f MB\n", N, N, (N * N * sizeof(float)) / (1024.0 * 1024.0));
+    printf("  Running Benchmark: M = %d, N = %d, Warmup = %d, Runs = %d\n", M, N, warmup_runs, benchmark_runs);
+    printf("  Input Matrix: %d x %d = %.2f MB\n", M, N, (M * N * sizeof(float)) / (1024.0 * 1024.0));
+    printf("  Output Matrix: %d x %d = %.2f MB\n", N, M, (N * M * sizeof(float)) / (1024.0 * 1024.0));
     printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
     // 分配主机内存
-    size_t size = N * N * sizeof(float);
-    float *h_A = (float *)malloc(size);
-    float *h_B = (float *)malloc(size);
+    size_t size_A = M * N * sizeof(float);
+    size_t size_B = N * M * sizeof(float);
+    float *h_A = (float *)malloc(size_A);
+    float *h_B = (float *)malloc(size_B);
 
     if (!h_A || !h_B) {
         printf("Error: Failed to allocate host memory\n");
@@ -158,47 +161,47 @@ void run_full_benchmark(int N, int warmup_runs, int benchmark_runs) {
     }
 
     // 初始化输入数据
-    init_matrix(h_A, N);
+    init_matrix(h_A, M, N);
 
     // 分配设备内存
     float *d_A, *d_B;
-    cudaMalloc(&d_A, size);
-    cudaMalloc(&d_B, size);
-    cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_A, size_A);
+    cudaMalloc(&d_B, size_B);
+    cudaMemcpy(d_A, h_A, size_A, cudaMemcpyHostToDevice);
 
     // 运行各个版本的基准测试
     std::vector<BenchmarkResult> results;
 
     // v1: 朴素实现
-    cudaMemset(d_B, 0, size);
+    cudaMemset(d_B, 0, size_B);
     results.push_back(benchmark_transpose(
         "v1_naive", transpose_naive,
-        d_A, d_B, h_A, h_B, N, warmup_runs, benchmark_runs));
+        d_A, d_B, h_A, h_B, M, N, warmup_runs, benchmark_runs));
 
     // v2: 共享内存 (有 bank conflict)
-    cudaMemset(d_B, 0, size);
+    cudaMemset(d_B, 0, size_B);
     results.push_back(benchmark_transpose(
         "v2_shared", transpose_shared_memory,
-        d_A, d_B, h_A, h_B, N, warmup_runs, benchmark_runs));
+        d_A, d_B, h_A, h_B, M, N, warmup_runs, benchmark_runs));
 
     // v3: Padding 优化
-    cudaMemset(d_B, 0, size);
+    cudaMemset(d_B, 0, size_B);
     results.push_back(benchmark_transpose(
         "v3_shared_pad", transpose_shared_pad,
-        d_A, d_B, h_A, h_B, N, warmup_runs, benchmark_runs));
+        d_A, d_B, h_A, h_B, M, N, warmup_runs, benchmark_runs));
 
     // v4: ILP 优化
-    cudaMemset(d_B, 0, size);
+    cudaMemset(d_B, 0, size_B);
     results.push_back(benchmark_transpose(
         "v4_optimized", transpose_optimized,
-        d_A, d_B, h_A, h_B, N, warmup_runs, benchmark_runs));
+        d_A, d_B, h_A, h_B, M, N, warmup_runs, benchmark_runs));
 
-    // v5: 向量化访问 (仅当 N 是 32 的倍数时)
-    if (N % 32 == 0) {
-        cudaMemset(d_B, 0, size);
+    // v5: 向量化访问 (仅当 M 和 N 是 32 的倍数时)
+    if (M % 32 == 0 && N % 32 == 0) {
+        cudaMemset(d_B, 0, size_B);
         results.push_back(benchmark_transpose(
             "v5_vectorized", transpose_vectorized,
-            d_A, d_B, h_A, h_B, N, warmup_runs, benchmark_runs));
+            d_A, d_B, h_A, h_B, M, N, warmup_runs, benchmark_runs));
     }
 
     // 打印结果

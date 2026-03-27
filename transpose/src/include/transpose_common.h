@@ -15,40 +15,40 @@
 // ============================================================================
 
 // v1: 朴素实现 - 非合并写入
-void transpose_naive(const float *d_A, float *d_B, int N, cudaStream_t stream = 0);
+void transpose_naive(const float *d_A, float *d_B, int M, int N, cudaStream_t stream = 0);
 
 // v2: 共享内存优化 - 存在 bank conflict
-void transpose_shared_memory(const float *d_A, float *d_B, int N, cudaStream_t stream = 0);
+void transpose_shared_memory(const float *d_A, float *d_B, int M, int N, cudaStream_t stream = 0);
 
 // v3: Padding 消除 Bank Conflict
-void transpose_shared_pad(const float *d_A, float *d_B, int N, cudaStream_t stream = 0);
+void transpose_shared_pad(const float *d_A, float *d_B, int M, int N, cudaStream_t stream = 0);
 
 // v4: ILP 与 Block 形状优化
-void transpose_optimized(const float *d_A, float *d_B, int N, cudaStream_t stream = 0);
+void transpose_optimized(const float *d_A, float *d_B, int M, int N, cudaStream_t stream = 0);
 
 // v5: float4 向量化访问
-void transpose_vectorized(const float *d_A, float *d_B, int N, cudaStream_t stream = 0);
+void transpose_vectorized(const float *d_A, float *d_B, int M, int N, cudaStream_t stream = 0);
 
 // ============================================================================
 // 辅助函数
 // ============================================================================
 
 // 初始化矩阵数据
-void init_matrix(float *h_A, int N, uint32_t seed = 42);
+void init_matrix(float *h_A, int M, int N, uint32_t seed = 42);
 
 // 验证转置结果
-bool verify_transpose(const float *h_A, const float *h_B, int N);
+bool verify_transpose(const float *h_A, const float *h_B, int M, int N);
 
 // 计算有效带宽 (GB/s)
-// 转置操作：读取 N*N 个 float，写入 N*N 个 float
-// 总数据量 = 2 * N * N * sizeof(float) 字节
-inline float compute_effective_bandwidth_ms(float ms, int N) {
-    float bytes = 2.0f * N * N * sizeof(float);
+// 转置操作：读取 M*N 个 float，写入 N*M 个 float
+// 总数据量 = 2 * M * N * sizeof(float) 字节
+inline float compute_effective_bandwidth_ms(float ms, int M, int N) {
+    float bytes = 2.0f * M * N * sizeof(float);
     return (bytes / (ms / 1000.0f)) / 1e9;  // GB/s
 }
 
-inline float compute_effective_bandwidth_us(float us, int N) {
-    float bytes = 2.0f * N * N * sizeof(float);
+inline float compute_effective_bandwidth_us(float us, int M, int N) {
+    float bytes = 2.0f * M * N * sizeof(float);
     return (bytes / (us / 1000000.0f)) / 1e9;  // GB/s
 }
 

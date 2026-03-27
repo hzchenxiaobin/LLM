@@ -10,22 +10,24 @@ static uint32_t lcg_rand(uint32_t *seed) {
 }
 
 // 初始化矩阵数据
-void init_matrix(float *h_A, int N, uint32_t seed) {
+void init_matrix(float *h_A, int M, int N, uint32_t seed) {
     uint32_t s = seed;
-    for (int i = 0; i < N * N; i++) {
+    for (int i = 0; i < M * N; i++) {
         // 生成 [0, 1) 范围的随机数
         h_A[i] = (float)lcg_rand(&s) / (float)0x80000000;
     }
 }
 
 // 验证转置结果
-bool verify_transpose(const float *h_A, const float *h_B, int N) {
+// h_A: M x N matrix (input)
+// h_B: N x M matrix (transposed output)
+bool verify_transpose(const float *h_A, const float *h_B, int M, int N) {
     const float epsilon = 1e-5f;
 
-    for (int y = 0; y < N; y++) {
+    for (int y = 0; y < M; y++) {
         for (int x = 0; x < N; x++) {
             float expected = h_A[y * N + x];
-            float actual = h_B[x * N + y];
+            float actual = h_B[x * M + y];
             if (fabsf(expected - actual) > epsilon) {
                 printf("Verification FAILED at (y=%d, x=%d): expected %.6f, got %.6f\n",
                        y, x, expected, actual);
