@@ -42,7 +42,7 @@ flowchart TB
 
     subgraph 每个线程的执行流程
         direction TB
-        LoadQ[1. 从全局内存加载Q的一行<br/>到寄存器q_vec[128]]
+        LoadQ["1. 从全局内存加载Q的一行<br/>到寄存器q_vec[128]"]
         LoopKV[2. 循环遍历所有K,V行]
         Dot[3. 计算点积 q·k]
         OnlineSoftmax[4. Online Softmax更新]
