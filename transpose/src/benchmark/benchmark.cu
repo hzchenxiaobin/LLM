@@ -221,3 +221,56 @@ void run_full_benchmark(int M, int N, int warmup_runs, int benchmark_runs) {
     free(h_A);
     free(h_B);
 }
+
+// 运行所有10个测试用例（不同尺寸的矩阵）
+void run_all_test_cases() {
+    // 10个不同的测试用例，包含各种典型尺寸
+    int test_cases[10][2] = {
+        {1024, 1024},      // 1K x 1K - 小矩阵
+        {2048, 2048},      // 2K x 2K
+        {4096, 4096},      // 4K x 4K
+        {8192, 8192},      // 8K x 8K - 默认大矩阵
+        {16384, 4096},     // 16K x 4K - 宽矩阵
+        {4096, 16384},     // 4K x 16K - 高矩阵
+        {1024, 8192},      // 1K x 8K - 非方阵
+        {8192, 1024},      // 8K x 1K - 非方阵
+        {512, 32768},      // 极窄高矩阵
+        {32768, 512}       // 极宽矮矩阵
+    };
+
+    const char* test_names[10] = {
+        "Small Square (1K x 1K)",
+        "Medium Square (2K x 2K)",
+        "Large Square (4K x 4K)",
+        "XLarge Square (8K x 8K)",
+        "Wide Matrix (16K x 4K)",
+        "Tall Matrix (4K x 16K)",
+        "Non-square (1K x 8K)",
+        "Non-square (8K x 1K)",
+        "Very Tall (512 x 32K)",
+        "Very Wide (32K x 512)"
+    };
+
+    printf("\n");
+    printf("╔════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                         Running All 10 Test Cases                          ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════╝\n");
+
+    for (int i = 0; i < 10; i++) {
+        int M = test_cases[i][0];
+        int N = test_cases[i][1];
+
+        printf("\n");
+        printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        printf("  Test Case %d/10: %s\n", i + 1, test_names[i]);
+        printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+
+        run_full_benchmark(M, N, 10, 100);
+    }
+
+    printf("\n");
+    printf("╔════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                        All 10 Test Cases Completed!                      ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════╝\n");
+    printf("\n");
+}
