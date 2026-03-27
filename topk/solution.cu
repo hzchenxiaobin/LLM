@@ -1,18 +1,23 @@
 #include <cuda_runtime.h>
 #include <cfloat>
 
+// ==========================================
+// Top-K Selection Solution
+// 从 src/topk_v5_multi_block.cu 抽取的核心实现
+// ==========================================
+
 #define MAX_K 128
 #define WARP_SIZE 32
 
-// Insert value into sorted array (descending)
-__device__ __forceinline__ void insert_sorted(float* arr, int K, float val) {
-    if (val <= arr[K - 1]) return;
+// Device function: Insert value into sorted array (descending)
+__device__ __forceinline__ void insert_topk(float* vals, int K, float new_val) {
+    if (new_val <= vals[K - 1]) return;
     int pos = K - 1;
-    while (pos > 0 && val > arr[pos - 1]) {
-        arr[pos] = arr[pos - 1];
+    while (pos > 0 && new_val > vals[pos - 1]) {
+        vals[pos] = vals[pos - 1];
         pos--;
     }
-    arr[pos] = val;
+    vals[pos] = new_val;
 }
 
 // Phase 1: Find local top-k in each block
@@ -37,14 +42,14 @@ __global__ void local_topk_kernel(const float* input, float* block_out, int N, i
     
     // Process elements
     for (int i = start + tid; i < end; i += blockDim.x) {
-        insert_sorted(local, K, input[i]);
+        insert_topk(local, K, input[i]);
     }
     
     // Shared memory for warp aggregation
     extern __shared__ float smem[];
     float* warp_buf = smem;
     
-    // Warp-level reduction to find best in each warp
+    // Warp-level reduction
     for (int k = 0; k < K; ++k) {
         float v = local[k];
         #pragma unroll
@@ -57,20 +62,18 @@ __global__ void local_topk_kernel(const float* input, float* block_out, int N, i
     
     __syncthreads();
     
-    // First warp: merge all warp results and output block's top-k
+    // First warp: merge and output
     if (warpid == 0) {
         float best[MAX_K];
         #pragma unroll
-        for (int i = 0; i < K; ++i) best[i] = -FLT_MAX;
+        for (int i = 0; i < MAX_K; ++i) best[i] = -FLT_MAX;
         
-        // Merge all warp results
         for (int w = lane; w < num_warps; w += WARP_SIZE) {
             for (int k = 0; k < K; ++k) {
-                insert_sorted(best, K, warp_buf[w * K + k]);
+                insert_topk(best, K, warp_buf[w * K + k]);
             }
         }
         
-        // Output K best values from this block
         for (int k = 0; k < K; ++k) {
             float v = best[k];
             #pragma unroll
@@ -78,57 +81,46 @@ __global__ void local_topk_kernel(const float* input, float* block_out, int N, i
                 float o = __shfl_down_sync(0xffffffff, v, off);
                 if (o > v) v = o;
             }
-            // Mark as used
             if (best[k] == v) best[k] = -FLT_MAX;
-            
             if (lane == 0) block_out[bid * K + k] = v;
         }
     }
 }
 
-// Phase 2: Merge all block results using selection algorithm
-// Each thread maintains its own candidate set, then we reduce
+// Phase 2: Merge all block results
 __global__ void merge_topk_kernel(const float* block_results, float* output,
-                                  int num_blocks, int K) {
+                                   int num_blocks, int K) {
     int tid = threadIdx.x;
     int total = num_blocks * K;
     
-    // Each thread loads and maintains top-K from its portion
     float my_best[MAX_K];
     for (int i = 0; i < K; ++i) my_best[i] = -FLT_MAX;
     
-    // Process all candidates in strided fashion
     for (int i = tid; i < total; i += blockDim.x) {
-        insert_sorted(my_best, K, block_results[i]);
+        insert_topk(my_best, K, block_results[i]);
     }
     
-    // Now we have num_threads candidate sets, need to find global top-K
-    // Use shared memory to collect results from groups of threads
-    __shared__ float s_data[256 * MAX_K / WARP_SIZE];  // 8 warps * K values
+    __shared__ float s_data[256 * MAX_K / WARP_SIZE];
     
     int lane = tid % WARP_SIZE;
     int warpid = tid / WARP_SIZE;
     int num_warps = blockDim.x / WARP_SIZE;
     
-    // Store my results in shared memory for my warp to merge
     for (int k = 0; k < K; ++k) {
         s_data[warpid * K + k] = my_best[k];
     }
     __syncthreads();
     
-    // First warp does final merge
     if (warpid == 0) {
         float final_best[MAX_K];
         for (int i = 0; i < K; ++i) final_best[i] = -FLT_MAX;
         
-        // Merge all warp results
         for (int w = lane; w < num_warps; w += WARP_SIZE) {
             for (int k = 0; k < K; ++k) {
-                insert_sorted(final_best, K, s_data[w * K + k]);
+                insert_topk(final_best, K, s_data[w * K + k]);
             }
         }
         
-        // Output final K values
         for (int k = 0; k < K; ++k) {
             float v = final_best[k];
             #pragma unroll
@@ -148,7 +140,7 @@ void solve(const float* input, float* output, int N, int k) {
     
     float *d_in = nullptr, *d_blocks = nullptr, *d_out = nullptr;
     
-    // Use many blocks for large N to saturate GPU
+    // Determine number of blocks based on N
     int nblocks = 256;
     if (N < 1000000) nblocks = 128;
     if (N < 100000) nblocks = 32;
@@ -161,11 +153,11 @@ void solve(const float* input, float* output, int N, int k) {
     
     cudaMemcpy(d_in, input, N * sizeof(float), cudaMemcpyHostToDevice);
     
-    // Phase 1: Local top-k per block
+    // Phase 1
     size_t smem = (256 / WARP_SIZE) * K * sizeof(float);
     local_topk_kernel<<<nblocks, 256, smem>>>(d_in, d_blocks, N, K);
     
-    // Phase 2: Final merge
+    // Phase 2
     merge_topk_kernel<<<1, 256>>>(d_blocks, d_out, nblocks, K);
     
     cudaMemcpy(output, d_out, K * sizeof(float), cudaMemcpyDeviceToHost);
