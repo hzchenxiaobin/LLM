@@ -46,11 +46,11 @@ where head_i = Attention(QW_i^Q, KW_i^K, VW_i^V)
 
 标准注意力的计算分为三步：
 
-1. **计算相似度**：$S = QK^T$ （得到 $N \times N$ 的分数矩阵）
-2. **Softmax 归一化**：$P = \text{softmax}(S / \sqrt{d})$ （得到注意力权重）
-3. **加权求和**：$O = PV$ （得到最终输出）
+1. **计算相似度**：`S = QK^T` （得到 N × N 的分数矩阵）
+2. **Softmax 归一化**：`P = softmax(S / √d)` （得到注意力权重）
+3. **加权求和**：`O = PV` （得到最终输出）
 
-**问题**：当序列长度 $N$ 很大时，$N \times N$ 的矩阵需要巨大的内存存储。
+**问题**：当序列长度 N 很大时，N × N 的矩阵需要巨大的内存存储。
 
 ---
 
@@ -126,23 +126,23 @@ Grid（网格）
 
 | 复杂度 | 名称 | 示例 |
 |--------|------|------|
-| $O(1)$ | 常数 | 数组索引访问 |
-| $O(\log N)$ | 对数 | 二分查找 |
-| $O(N)$ | 线性 | 遍历数组 |
-| $O(N \log N)$ | 线性对数 | 快速排序 |
-| $O(N^2)$ | 平方 | 双重循环、矩阵乘法 |
-| $O(2^N)$ | 指数 | 穷举所有子集 |
+| O(1) | 常数 | 数组索引访问 |
+| O(log N) | 对数 | 二分查找 |
+| O(N) | 线性 | 遍历数组 |
+| O(N log N) | 线性对数 | 快速排序 |
+| O(N²) | 平方 | 双重循环、矩阵乘法 |
+| O(2^N) | 指数 | 穷举所有子集 |
 
 ### 3.2 标准注意力的复杂度
 
-**时间复杂度**：$O(N^2 \cdot d)$
-- $QK^T$ 矩阵乘法：$O(N \cdot d \cdot N) = O(N^2 d)$
-- Softmax 计算：$O(N^2)$
-- 与 V 相乘：$O(N \cdot N \cdot d) = O(N^2 d)$
+**时间复杂度**：O(N² × d)
+- QK^T 矩阵乘法：O(N × d × N) = O(N²d)
+- Softmax 计算：O(N²)
+- 与 V 相乘：O(N × N × d) = O(N²d)
 
-**空间复杂度**：$O(N^2)$
-- 需要存储 $N \times N$ 的注意力分数矩阵
-- 当 $N = 100K$ 时，$N^2 = 10^{10}$ 个元素！
+**空间复杂度**：O(N²)
+- 需要存储 N × N 的注意力分数矩阵
+- 当 N = 100K 时，N² = 10¹⁰ 个元素！
 
 ### 3.3 内存带宽瓶颈
 
@@ -170,11 +170,11 @@ softmax(x_i) = exp(x_i) / Σ_j exp(x_j)
 
 ### 4.2 数值稳定性问题
 
-直接计算 $e^x$ 会导致数值溢出（当 $x$ 很大时）。
+直接计算 `exp(x)` 会导致数值溢出（当 x 很大时）。
 
 **解决方案 - 数值稳定的 Softmax**：
 ```
-softmax(x_i) = exp(x_i - max(x)) / Σ_j exp(x_j - max(x))
+softmax(x_i) = exp(x_i - max(x)) / Σ exp(x_j - max(x))
 ```
 
 减去最大值保证指数的最大值为 0，避免溢出。
@@ -187,10 +187,10 @@ softmax(x_i) = exp(x_i - max(x)) / Σ_j exp(x_j - max(x))
 
 **Online Softmax** 可以在一次遍历中完成，适合流式处理：
 
-对于分块输入 $[x^{(1)}, x^{(2)}]$：
+对于分块输入 [x⁽¹⁾, x⁽²⁾]：
 ```
 m_new = max(m_old, m_current)
-l_new = l_old * exp(m_old - m_new) + Σ exp(x_current - m_new)
+l_new = l_old × exp(m_old - m_new) + Σ exp(x_current - m_new)
 ```
 
 通过维护运行时的最大值和指数和，可以逐步更新 Softmax 结果。
@@ -269,7 +269,7 @@ __global__ void sharedMemoryExample(float* input, float* output) {
 ### 6.1 核心问题
 
 标准注意力的瓶颈：
-- **内存**：$O(N^2)$ 的中间矩阵存储
+- **内存**：O(N²) 的中间矩阵存储
 - **IO**：频繁的 HBM 读写
 - **利用率**：算力闲置，等待数据
 
@@ -304,6 +304,10 @@ __global__ void sharedMemoryExample(float* input, float* output) {
 └─────────────┘          └─────┴─────┴─────┘
 ```
 
+其中：
+- Br：行方向的块大小（Block row size）
+- Bc：列方向的块大小（Block column size）
+
 #### Kernel Fusion（核函数融合）
 
 将多个操作合并为一个 CUDA 核函数：
@@ -317,7 +321,7 @@ __global__ void sharedMemoryExample(float* input, float* output) {
 #### Recomputation（重计算）
 
 训练时不在 HBM 保存中间矩阵，反向传播时重新计算：
-- 仅保存 $O(N)$ 的统计量（最大值、指数和）
+- 仅保存 O(N) 的统计量（最大值、指数和）
 - 用更多计算换取更少内存带宽
 
 ### 6.4 版本演进
