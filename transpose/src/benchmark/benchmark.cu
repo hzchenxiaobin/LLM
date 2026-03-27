@@ -165,9 +165,16 @@ void run_full_benchmark(int M, int N, int warmup_runs, int benchmark_runs) {
 
     // 分配设备内存
     float *d_A, *d_B;
-    cudaMalloc(&d_A, size_A);
-    cudaMalloc(&d_B, size_B);
+    cudaError_t err_A = cudaMalloc(&d_A, size_A);
+    cudaError_t err_B = cudaMalloc(&d_B, size_B);
+    if (err_A != cudaSuccess || err_B != cudaSuccess) {
+        printf("Error: Failed to allocate device memory: %s\n", cudaGetErrorString(err_A != cudaSuccess ? err_A : err_B));
+        free(h_A);
+        free(h_B);
+        return;
+    }
     cudaMemcpy(d_A, h_A, size_A, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
 
     // 运行各个版本的基准测试
     std::vector<BenchmarkResult> results;
