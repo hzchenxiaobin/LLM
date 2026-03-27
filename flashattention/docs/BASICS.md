@@ -24,7 +24,13 @@
 自注意力是 Transformer 架构的核心，其数学定义为：
 
 ```
-Attention(Q, K, V) = softmax(QK^T / √d) V
+Attention(Q, K, V) = softmax( (Q × K^T) / sqrt(d) ) × V
+```
+
+或简写为：
+
+```
+Attention(Q, K, V) = softmax(QK^T / sqrt(d)) V
 ```
 
 其中：
