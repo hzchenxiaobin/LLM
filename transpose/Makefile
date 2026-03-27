@@ -27,7 +27,7 @@ TARGET = transpose_benchmark
 # Default target
 .PHONY: all clean run profile
 
-all: $(TARGET)
+all: clean $(TARGET)
 
 # Create object directory
 $(OBJ_DIR):
@@ -49,11 +49,14 @@ $(MAIN_OBJ): $(MAIN_SRC) | $(OBJ_DIR)
 $(TARGET): $(TRANSPOSE_OBJS) $(BENCHMARK_OBJS) $(MAIN_OBJ)
 	$(NVCC) $(NVCC_FLAGS) $^ -o $@
 
-# Run with default settings
+# Run with default settings (all 10 test cases)
 run: $(TARGET)
+	./$(TARGET) -a
+
+# Run with different matrix sizes (single test)
+run-single: $(TARGET)
 	./$(TARGET)
 
-# Run with different matrix sizes
 run-small: $(TARGET)
 	./$(TARGET) -n 4096
 

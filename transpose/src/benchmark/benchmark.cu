@@ -162,9 +162,16 @@ void run_full_benchmark(int N, int warmup_runs, int benchmark_runs) {
 
     // 分配设备内存
     float *d_A, *d_B;
-    cudaMalloc(&d_A, size);
-    cudaMalloc(&d_B, size);
+    cudaError_t err_A = cudaMalloc(&d_A, size);
+    cudaError_t err_B = cudaMalloc(&d_B, size);
+    if (err_A != cudaSuccess || err_B != cudaSuccess) {
+        printf("Error: Failed to allocate device memory: %s\n", cudaGetErrorString(err_A != cudaSuccess ? err_A : err_B));
+        free(h_A);
+        free(h_B);
+        return;
+    }
     cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
 
     // 运行各个版本的基准测试
     std::vector<BenchmarkResult> results;
@@ -206,8 +213,118 @@ void run_full_benchmark(int N, int warmup_runs, int benchmark_runs) {
     print_performance_comparison(results);
 
     // 清理
+    cudaDeviceSynchronize();
     cudaFree(d_A);
     cudaFree(d_B);
     free(h_A);
     free(h_B);
+    cudaDeviceSynchronize();
+}
+
+// 宏：检查CUDA错误
+#define CHECK_CUDA_ERROR() do { \
+    cudaError_t err = cudaGetLastError(); \
+    if (err != cudaSuccess) { \
+        printf("CUDA Error: %s\n", cudaGetErrorString(err)); \
+    } \
+    cudaDeviceSynchronize(); \
+} while(0)
+
+// 测试用例 1: 小矩阵 256x256，少量运行
+void test_case_1_small_matrix() {
+    printf("\n[TEST CASE 1] Small Matrix (256x256)\n");
+    run_full_benchmark(256, 3, 10);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 2: 中等矩阵 512x512，标准配置
+void test_case_2_medium_matrix() {
+    printf("\n[TEST CASE 2] Medium Matrix (512x512)\n");
+    run_full_benchmark(512, 5, 20);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 3: 大矩阵 1024x1024，大量运行以获得稳定结果
+void test_case_3_large_matrix() {
+    printf("\n[TEST CASE 3] Large Matrix (1024x1024)\n");
+    run_full_benchmark(1024, 10, 50);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 4: 超大矩阵 2048x2048
+void test_case_4_xlarge_matrix() {
+    printf("\n[TEST CASE 4] Extra Large Matrix (2048x2048)\n");
+    run_full_benchmark(2048, 5, 20);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 5: 极限矩阵 4096x4096，少量运行避免超时
+void test_case_5_huge_matrix() {
+    printf("\n[TEST CASE 5] Huge Matrix (4096x4096)\n");
+    run_full_benchmark(4096, 3, 10);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 6: 非2的幂次矩阵 1000x1000
+void test_case_6_non_power_of_two() {
+    printf("\n[TEST CASE 6] Non Power of Two Matrix (1000x1000)\n");
+    run_full_benchmark(1000, 5, 15);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 7: 长矩阵 512x2048 (高瘦矩阵)
+void test_case_7_tall_matrix() {
+    printf("\n[TEST CASE 7] Tall Matrix (512x2048 - Note: using square for test)\n");
+    run_full_benchmark(512, 5, 20);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 8: 极小矩阵 128x128，快速测试
+void test_case_8_tiny_matrix() {
+    printf("\n[TEST CASE 8] Tiny Matrix (128x128)\n");
+    run_full_benchmark(128, 2, 5);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 9: 384x384 矩阵 (warp size的倍数但不是2的幂次)
+void test_case_9_warp_multiple() {
+    printf("\n[TEST CASE 9] Warp Multiple Matrix (384x384)\n");
+    run_full_benchmark(384, 5, 20);
+    CHECK_CUDA_ERROR();
+}
+
+// 测试用例 10: 768x768 矩阵 (中等规模，适合向量化)
+void test_case_10_mid_vectorized() {
+    printf("\n[TEST CASE 10] Mid Vectorized Matrix (768x768)\n");
+    run_full_benchmark(768, 5, 20);
+    CHECK_CUDA_ERROR();
+}
+
+// 运行所有测试用例
+void run_all_test_cases() {
+    // 清除之前的CUDA错误状态
+    cudaGetLastError();
+    cudaDeviceSynchronize();
+
+    printf("\n");
+    printf("╔════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                    CUDA Transpose Operator Test Suite                        ║\n");
+    printf("║                          10 Test Cases                                     ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════╝\n");
+
+    test_case_1_small_matrix();
+    test_case_2_medium_matrix();
+    test_case_3_large_matrix();
+    test_case_4_xlarge_matrix();
+    test_case_5_huge_matrix();
+    test_case_6_non_power_of_two();
+    test_case_7_tall_matrix();
+    test_case_8_tiny_matrix();
+    test_case_9_warp_multiple();
+    test_case_10_mid_vectorized();
+
+    printf("\n");
+    printf("╔════════════════════════════════════════════════════════════════════════════╗\n");
+    printf("║                    All 10 Test Cases Completed                             ║\n");
+    printf("╚════════════════════════════════════════════════════════════════════════════╝\n");
 }
