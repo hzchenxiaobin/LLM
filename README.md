@@ -10,7 +10,7 @@
 - `transpose/`：矩阵转置 5 个版本，含 Shared Memory、Padding、ILP、Vectorize
 - `softmax/`：Softmax 5 个版本，从多 Kernel 到 Online Softmax
 - `topk/`：TopK 4 个版本，含排序、Warp Shuffle 与 Radix Select
-- `flashattention/`：FlashAttention 6 个版本，含 Shared KV、雙缓冲、Tensor Core
+- `flashattention/`：FlashAttention 6 个版本，含 Shared KV、双缓冲、Tensor Core
 - `batch_gemm/`：批量 GEMM 实现与分析
 - `docs/`：体系化教程，从 CUDA 基础到 GEMM、性能分析、剖析方法
 
@@ -39,13 +39,13 @@ cd ../flashattention && make && ./build/benchmark_flashattention
 
 ### GEMM：矩阵乘法优化（7 版本）
 
-- V0：朴素全局内存版本
-- V1：Shared Memory 分块
-- V2：寄存器分块
-- V3：向量化 (`float4`) 访问
-- V4：Bank Conflict 消除
-- V5：双缓冲（计算/加载重叠）
-- V6：cuBLAS 参考实现
+- V0：朴素全局内存版本（`sgemm_naive.cu`）
+- V1：Shared Memory 分块（`sgemm_shared.cu`）
+- V2：寄存器分块（`sgemm_register.cu`）
+- V3：向量化（`float4`）访问（`sgemm_register_vectorized.cu`）
+- V4：Bank Conflict 消除（`sgemm_register_bank_conflict.cu`）
+- V5：向量化 + Bank 消除（`sgemm_register_vec_bank.cu`）
+- V6：cuBLAS 参考实现（`sgemm_cublas.cu`）
 
 ### Scan：前缀和算法（4 版本）
 
@@ -56,12 +56,12 @@ cd ../flashattention && make && ./build/benchmark_flashattention
 
 ### Reduction：归约运算（6 版本）
 
-- V1：Interleaved Addressing
-- V2：Strided Indexing
-- V3：Sequential Addressing
-- V4：加载时提前归约
-- V5：Warp Shuffle（寄存器归约）
-- V6：向量化 + Grid-Stride
+- V1：Interleaved Addressing（`reduce_v1_interleaved.cu`）
+- V2：Strided Indexing（`reduce_v2_strided.cu`）
+- V3：Sequential Addressing（`reduce_v3_sequential.cu`）
+- V4：加载时提前归约（`reduce_v4_first_add.cu`）
+- V5：Warp Shuffle（寄存器归约）（`reduce_v5_warp_shuffle.cu`）
+- V6：向量化 + Grid-Stride（`reduce_v6_vectorized.cu`）
 
 ### Transpose：矩阵转置（5 版本）
 
@@ -69,7 +69,7 @@ cd ../flashattention && make && ./build/benchmark_flashattention
 - V2：Shared Memory Tiling
 - V3：Padding（`TILE_DIM+1`）
 - V4：ILP（每线程多元素）
-- V5：Vectorized `float4`
+- V5：Vectorized `float4`（`sgemm_register_vec_bank.cu`）
 
 ### Softmax：归一化（5 版本）
 
@@ -117,4 +117,3 @@ cd ../flashattention && make && ./build/benchmark_flashattention
 ### 研发作者
 
 `LLM` 仓库维护者
-
