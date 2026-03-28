@@ -10,44 +10,46 @@
 
 ```mermaid
 flowchart TB
-    subgraph 输入数据
-        Q[Q矩阵: N×d]<-->K[K矩阵: N×d]
-        V[V矩阵: N×d]
+    subgraph in_data["输入数据"]
+        Q["Q矩阵: N×d"]
+        K["K矩阵: N×d"]
+        V["V矩阵: N×d"]
+        Q <--> K
     end
 
-    subgraph GPU并行结构
+    subgraph gpu_grid["GPU并行结构"]
         direction TB
-        Grid[Grid: num_blocks个block]
+        Grid["Grid: num_blocks 个 block"]
 
-        subgraph Block0[Block 0: 处理Q的行0-63]
-            T0[Thread 0: Q行0]
-            T1[Thread 1: Q行1]
-            T63[Thread 63: Q行63]
+        subgraph blk0["Block 0: 处理 Q 行 0-63"]
+            T0["Thread 0: Q 行 0"]
+            T1["Thread 1: Q 行 1"]
+            T63["Thread 63: Q 行 63"]
         end
 
-        subgraph Block1[Block 1: 处理Q的行64-127]
-            T64[Thread 0: Q行64]
-            T65[Thread 1: Q行65]
-            T127[Thread 63: Q行127]
+        subgraph blk1["Block 1: 处理 Q 行 64-127"]
+            T64["Thread 0: Q 行 64"]
+            T65["Thread 1: Q 行 65"]
+            T127["Thread 63: Q 行 127"]
         end
 
-        subgraph BlockN[Block N-1]
-            TN[Threads...]
+        subgraph blkN["Block N-1"]
+            TN["Threads..."]
         end
     end
 
-    Grid --> Block0
-    Grid --> Block1
-    Grid --> BlockN
+    Grid --> blk0
+    Grid --> blk1
+    Grid --> blkN
 
-    subgraph 每个线程的执行流程
+    subgraph per_thread["每个线程的执行流程"]
         direction TB
-        LoadQ["1. 从全局内存加载Q的一行<br/>到寄存器q_vec[128]"]
-        LoopKV[2. 循环遍历所有K,V行]
-        Dot[3. 计算点积 q·k]
-        OnlineSoftmax[4. Online Softmax更新]
-        UpdateO[5. 累加输出到o_acc]
-        Normalize[6. 最终归一化并写入O]
+        LoadQ["1. 从全局内存加载 Q 的一行<br>到寄存器 q_vec[128]"]
+        LoopKV["2. 循环遍历所有 K,V 行"]
+        Dot["3. 计算点积 q·k"]
+        OnlineSoftmax["4. Online Softmax 更新"]
+        UpdateO["5. 累加输出到 o_acc"]
+        Normalize["6. 最终归一化并写入 O"]
     end
 
     Q --> LoadQ
@@ -232,24 +234,24 @@ exp_prev = exp(5-8) = exp(-3) 就是重新缩放因子！
 
 ```mermaid
 flowchart LR
-    subgraph 初始状态
-        m0[m = -∞]
-        l0[l = 0]
+    subgraph s0["初始状态"]
+        m0["m = -∞"]
+        l0["l = 0"]
     end
 
-    subgraph "处理x0=3"
-        m1[m = 3]
-        l1[l = exp(3-3) = 1]
+    subgraph s1["处理 x0=3"]
+        m1["m = 3"]
+        l1["l = exp(3-3) = 1"]
     end
 
-    subgraph "处理x1=5"
-        m2[m = 5]
-        l2[l = 1*exp(3-5) + exp(5-5) = e^-2 + 1]
+    subgraph s2["处理 x1=5"]
+        m2["m = 5"]
+        l2["l = 1·exp(3-5) + exp(5-5) = e^-2 + 1"]
     end
 
-    subgraph "处理x2=4"
-        m3[m = 5]
-        l3[l = (e^-2+1)*exp(5-5) + exp(4-5) = e^-2+1+e^-1]
+    subgraph s3["处理 x2=4"]
+        m3["m = 5"]
+        l3["l = (e^-2+1)·exp(5-5) + exp(4-5)"]
     end
 
     m0 --> m1 --> m2 --> m3
@@ -372,8 +374,9 @@ FlashAttention V1：
                           | /
                           |/____________________
                            |                    \\
-                           |  Memory Bound       \\\n                           |  Region              \\\
-                           |_______________________\\\\\\___ Arithmetic Intensity
+                           |  Memory Bound       \\
+                           |  Region              \\
+                           |_______________________\\___ Arithmetic Intensity
                            0.01    0.1    1    10    100
 
 V1的位置: AI ≈ 1 (内存密集区)
@@ -387,22 +390,22 @@ V1的位置: AI ≈ 1 (内存密集区)
 
 ```mermaid
 flowchart TB
-    subgraph 问题1[无共享内存使用]
-        A1[每个线程独立加载K/V]
-        A2[K/V被重复加载 Br次]
-        A3[全局内存高延迟~400cycles]
+    subgraph p1["问题1: 无共享内存使用"]
+        A1["每个线程独立加载 K/V"]
+        A2["K/V 被重复加载 Br 次"]
+        A3["全局内存高延迟约 400 cycles"]
     end
 
-    subgraph 问题2[低Occupancy]
-        B1[每线程使用大量寄存器]
-        B2[每block仅64线程]
-        B3[SM上可同时运行的block数受限]
+    subgraph p2["问题2: 低 Occupancy"]
+        B1["每线程使用大量寄存器"]
+        B2["每 block 仅 64 线程"]
+        B3["SM 上可同时运行的 block 数受限"]
     end
 
-    subgraph 问题3[串行KV处理]
-        C1[for循环遍历N个KV位置]
-        C2[无KV维度并行]
-        C3[无法利用更多线程]
+    subgraph p3["问题3: 串行 KV 处理"]
+        C1["for 循环遍历 N 个 KV 位置"]
+        C2["无 KV 维度并行"]
+        C3["无法利用更多线程"]
     end
 ```
 
@@ -442,10 +445,10 @@ scale = 1/sqrt(2) ≈ 0.707
 
 ```mermaid
 flowchart LR
-    V1[V1: 朴素实现<br/>全局内存<br/>AI≈1] --> V2[V2: Shared KV<br/>减少K/V加载<br/>AI≈Br]
-    V2 --> V3[V3: 双缓冲<br/>隐藏延迟<br/>AI≈Br]
-    V3 --> V4[V4: 向量化<br/>float4加载<br/>带宽↑4x]
-    V4 --> V5[V5: FA-2<br/>Split-KV并行<br/>更好occupancy]
+    V1["V1: 朴素实现<br>全局内存<br>AI≈1"] --> V2["V2: Shared KV<br>减少 K/V 加载<br>AI≈Br"]
+    V2 --> V3["V3: 双缓冲<br>隐藏延迟<br>AI≈Br"]
+    V3 --> V4["V4: 向量化<br>float4 加载<br>带宽×4"]
+    V4 --> V5["V5: FA-2<br>Split-KV 并行<br>更好 occupancy"]
 ```
 
 **下一版本(V2)优化点**：
