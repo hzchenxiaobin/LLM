@@ -8,6 +8,9 @@
 #include <math.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 // Error checking macro
 #define CUDA_CHECK(call) \
@@ -69,9 +72,16 @@ inline float max_error(const float* a, const float* b, int size) {
 }
 
 inline double get_time_ms() {
+#ifdef _WIN32
+    LARGE_INTEGER f, c;
+    QueryPerformanceFrequency(&f);
+    QueryPerformanceCounter(&c);
+    return 1000.0 * (double)c.QuadPart / (double)f.QuadPart;
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
+#endif
 }
 
 // Benchmark result structure

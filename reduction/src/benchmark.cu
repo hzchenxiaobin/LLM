@@ -36,13 +36,13 @@ struct VersionInfo {
 };
 
 const VersionInfo VERSIONS[] = {
-    {1, "v1_interleaved", "朴素版本 - Warp Divergence"},
-    {2, "v2_strided", "解决分支发散 - Bank Conflict"},
-    {3, "v3_sequential", "解决 Bank Conflict"},
-    {4, "v4_first_add", "加载时相加"},
-    {5, "v5_warp_shuffle", "Warp Shuffle"},
-    {6, "v6_vectorized", "向量化访存"},
-    {7, "cub", "NVIDIA CUB 库"},
+    {1, "v1_interleaved", "naive interleaved"},
+    {2, "v2_strided", "strided"},
+    {3, "v3_sequential", "sequential"},
+    {4, "v4_first_add", "first-add"},
+    {5, "v5_warp_shuffle", "warp shuffle"},
+    {6, "v6_vectorized", "vectorized"},
+    {7, "cub", "NVIDIA CUB"},
 };
 
 // ============================================================
@@ -237,20 +237,20 @@ int main(int argc, char **argv) {
 
     // 帮助信息
     if (show_help || argc == 1) {
-        printf("CUDA Reduction 性能测试\n");
-        printf("用法: %s [选项]\n", argv[0]);
-        printf("\n选项:\n");
-        printf("  -s, --sizes SIZES       测试数据规模 (如: 1M 10M 100M 1G)\n");
-        printf("  -v, --versions VERS     测试版本 (1-7 或 all)\n");
-        printf("  -w, --warmup N          预热迭代次数 (默认: 10)\n");
-        printf("  -i, --iterations N      测试迭代次数 (默认: 100)\n");
-        printf("  -q, --quick             快速模式 (warmup=3, iterations=10)\n");
-        printf("  -h, --help              显示帮助\n");
-        printf("\n版本说明:\n");
+        printf("CUDA Reduction benchmark\n");
+        printf("Usage: %s [options]\n", argv[0]);
+        printf("\nOptions:\n");
+        printf("  -s, --sizes SIZES       problem sizes (e.g. 1M 10M 100M 1G)\n");
+        printf("  -v, --versions VERS     versions 1-7 or all\n");
+        printf("  -w, --warmup N          warmup iters (default 10)\n");
+        printf("  -i, --iterations N      timed iters (default 100)\n");
+        printf("  -q, --quick             quick (warmup=3, iters=10)\n");
+        printf("  -h, --help              this help\n");
+        printf("\nVersions:\n");
         for (const auto& v : VERSIONS) {
             printf("  %d: %s - %s\n", v.id, v.name.c_str(), v.desc.c_str());
         }
-        printf("\n示例:\n");
+        printf("\nExamples:\n");
         printf("  %s -s 1M 10M 100M -v all\n", argv[0]);
         printf("  %s -s 100M -v 1 3 5 6 -q\n", argv[0]);
         return 0;
@@ -270,7 +270,7 @@ int main(int argc, char **argv) {
     float peak_bw = 2.0f * (prop.memoryClockRate / 1e6f) * (prop.memoryBusWidth / 8.0f);
 
     printf("================================================================================\n");
-    printf("CUDA Reduction 性能测试\n");
+    printf("CUDA Reduction benchmark\n");
     printf("================================================================================\n");
     printf("GPU: %s (Compute %d.%d)\n", prop.name, prop.major, prop.minor);
     printf("Peak Memory Bandwidth: %.2f GB/s\n", peak_bw);
@@ -300,7 +300,7 @@ int main(int argc, char **argv) {
         n = (n / 4) * 4;  // 对齐
         if (n == 0) n = 4;
 
-        printf("数据规模: %u 元素 (%s)\n", n, format_size(n * sizeof(float)));
+        printf("Size: %u elements (%s)\n", n, format_size(n * sizeof(float)));
         printf("--------------------------------------------------------------------------------\n");
 
         // 初始化数据
@@ -321,11 +321,11 @@ int main(int argc, char **argv) {
                     all_results.push_back(cub_result);
                     cub_tested = true;
 
-                    printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%) [基准]\n",
-                           "✓", cub_result.name.c_str(), cub_result.time_ms,
+                    printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%) [ref]\n",
+                           "OK", cub_result.name.c_str(), cub_result.time_ms,
                            cub_result.bandwidth_gb_s, cub_result.efficiency);
                 } catch (...) {
-                    printf("  ✗ %-20s: 错误\n", VERSIONS[6].name.c_str());
+                    printf("  NO %-20s: error\n", VERSIONS[6].name.c_str());
                 }
                 break;
             }
@@ -354,7 +354,7 @@ int main(int argc, char **argv) {
                 }
                 all_results.push_back(result);
 
-                const char* status = result.correct ? "✓" : "✗";
+                const char* status = result.correct ? "OK" : "NO";
                 if (cub_tested) {
                     printf("  %s %-20s: %8.4f ms | %7.2f GB/s (%5.1f%%) | vs CUB: %.2fx\n",
                            status, result.name.c_str(), result.time_ms,
@@ -366,7 +366,7 @@ int main(int argc, char **argv) {
                            result.bandwidth_gb_s, result.efficiency);
                 }
             } catch (...) {
-                printf("  ✗ %-20s: 错误\n", VERSIONS[version-1].name.c_str());
+                printf("  NO %-20s: error\n", VERSIONS[version-1].name.c_str());
             }
         }
         printf("\n");
@@ -374,7 +374,7 @@ int main(int argc, char **argv) {
 
     // 打印摘要 (以 CUB 为基准对比)
     printf("================================================================================\n");
-    printf("性能测试摘要 (以 CUB 为基准)\n");
+    printf("Summary (vs CUB)\n");
     printf("================================================================================\n");
 
     for (unsigned int n : sizes) {
@@ -400,21 +400,21 @@ int main(int argc, char **argv) {
 
         printf("\n%s (%s):\n", format_size(n * sizeof(float)), format_size(n));
         if (cub_bw > 0) {
-            printf("  CUB 基准: %.2f GB/s\n", cub_bw);
+            printf("  CUB ref: %.2f GB/s\n", cub_bw);
         }
         printf("  %-20s %10s %12s %10s %12s %6s\n",
-               "版本", "时间(ms)", "带宽(GB/s)", "效率", "vs CUB", "状态");
+               "ver", "time(ms)", "BW(GB/s)", "eff%%", "vs CUB", "stat");
         printf("  --------------------------------------------------------------------------------\n");
         for (const auto& r : results_for_size) {
-            const char* status = r.correct ? "✓" : "✗";
+            const char* status = r.correct ? "OK" : "NO";
             char vs_cub_str[32];
             if (r.name == "cub") {
-                snprintf(vs_cub_str, sizeof(vs_cub_str), "基准");
+                snprintf(vs_cub_str, sizeof(vs_cub_str), "ref");
             } else if (r.speedup_vs_cub > 0) {
                 if (r.speedup_vs_cub >= 1.0f) {
-                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx 慢", r.speedup_vs_cub);
+                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx slow", r.speedup_vs_cub);
                 } else {
-                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx 快", 1.0f / r.speedup_vs_cub);
+                    snprintf(vs_cub_str, sizeof(vs_cub_str), "%.2fx fast", 1.0f / r.speedup_vs_cub);
                 }
             } else {
                 snprintf(vs_cub_str, sizeof(vs_cub_str), "N/A");
@@ -429,7 +429,7 @@ int main(int argc, char **argv) {
                                   [](const TestResult& a, const TestResult& b) {
                                       return a.bandwidth_gb_s < b.bandwidth_gb_s;
                                   });
-    printf("\n整体最佳: %s @ %s: %.2f GB/s (%.1f%%)\n",
+    printf("\nBest overall: %s @ %s: %.2f GB/s (%.1f%%)\n",
            best.name.c_str(), format_size(best.n * sizeof(float)),
            best.bandwidth_gb_s, best.efficiency);
 
@@ -442,10 +442,10 @@ int main(int argc, char **argv) {
                                               });
     if (best_handwritten.name != "cub" && best_handwritten.speedup_vs_cub > 0) {
         if (best_handwritten.speedup_vs_cub >= 1.0f) {
-            printf("最佳手写版本 (%s) 比 CUB 慢 %.2f 倍\n",
+            printf("Best handwritten (%s): %.2fx slower than CUB\n",
                    best_handwritten.name.c_str(), best_handwritten.speedup_vs_cub);
         } else {
-            printf("最佳手写版本 (%s) 达到 CUB %.1f%% 性能\n",
+            printf("Best handwritten (%s): %.1f%% of CUB BW\n",
                    best_handwritten.name.c_str(), (1.0f / best_handwritten.speedup_vs_cub) * 100.0f);
         }
     }

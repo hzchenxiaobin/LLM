@@ -134,7 +134,7 @@ int main(int argc, char** argv) {
             printf("%-40s %10.4f %12.2f %12.2e %s\n",
                    results[i].name, results[i].time_ms,
                    results[i].bandwidth_gbps, results[i].max_error,
-                   results[i].passed ? "✓" : "✗");
+                   results[i].passed ? "OK" : "NO");
         }
 
         // Find best performing

@@ -33,8 +33,15 @@ core.*
 
 # 构建目录
 build/
+build_ncu/
 dist/
 cmake-build-*/
+
+# Nsight Compute / Python
+ncu_results/
+GEMM/ncu_results/
+__pycache__/
+*.ncu-rep
 
 # GEMM 第三方依赖（按需 git clone，见 GEMM/docs/cutlass_build.md）
 GEMM/third_party/cutlass/

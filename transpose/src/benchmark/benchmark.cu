@@ -105,7 +105,7 @@ void print_results_table(const std::vector<BenchmarkResult>& results) {
     printf("╠══════════════════════╪════════════╪════════════╪════════════╪════════════╪════════════╣\n");
 
     for (const auto& r : results) {
-        const char* status = r.verified ? "✓" : "✗";
+        const char* status = r.verified ? "OK" : "NO";
         printf("║ %-20s │ %10.4f │ %10.4f │ %10.4f │ %10.2f │ %6.1f ║ %s\n",
                r.name.c_str(), r.min_time_ms, r.max_time_ms, r.avg_time_ms,
                r.effective_bw_gbps, r.efficiency, status);
@@ -114,7 +114,7 @@ void print_results_table(const std::vector<BenchmarkResult>& results) {
     printf("╚══════════════════════╧════════════╧════════════╧════════════╧════════════╧════════════╝\n");
     printf("\n");
     printf("Note: BW = Effective Bandwidth, Eff%% = Efficiency vs Theoretical BW\n");
-    printf("      ✓ = Verified, ✗ = Failed verification\n");
+    printf("      OK = Verified, NO = Failed verification\n");
     printf("\n");
 }
 

@@ -362,15 +362,14 @@ void run_comparison_suite() {
 
 int main(int argc, char* argv[]) {
     std::cout << "========================================" << std::endl;
-    std::cout << "     Top-K CUDA Benchmark (1D版本)    " << std::endl;
-    std::cout << "     无Batch轴，无索引输出             " << std::endl;
+    std::cout << "     Top-K CUDA Benchmark (1D)        " << std::endl;
     std::cout << "========================================" << std::endl;
-    std::cout << "\n用法: " << argv[0] << " [mode]" << std::endl;
-    std::cout << "  mode: all      - 运行所有预定义测试 (默认)" << std::endl;
-    std::cout << "        quick    - 仅运行快速测试" << std::endl;
-    std::cout << "        llm      - 仅运行 LLM 相关测试" << std::endl;
-    std::cout << "        compare  - 运行对比测试套件" << std::endl;
-    std::cout << "        custom N K - 自定义测试参数" << std::endl;
+    std::cout << "\nUsage: " << argv[0] << " [mode]" << std::endl;
+    std::cout << "  mode: all      - all predefined tests (default)" << std::endl;
+    std::cout << "        quick    - quick tests only" << std::endl;
+    std::cout << "        llm      - LLM-shaped tests only" << std::endl;
+    std::cout << "        compare  - comparison suite" << std::endl;
+    std::cout << "        custom N K - custom N and K" << std::endl;
 
     std::string mode = "all";
     if (argc > 1) mode = argv[1];
@@ -408,7 +407,7 @@ int main(int argc, char* argv[]) {
     }
 
     std::cout << "\n========================================" << std::endl;
-    std::cout << "         所有测试完成!                 " << std::endl;
+    std::cout << "         All tests done.               " << std::endl;
     std::cout << "========================================" << std::endl;
 
     return 0;
