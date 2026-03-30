@@ -83,6 +83,6 @@ $(BUILD_GEMM_DIR)/v6_vec_bank.o: $(GEMM_DIR)/v6_vec_bank.cu $(SRC_DIR)/common.h 
 clean:
 	rm -rf $(BUILD_DIR)
 
-# 构建并运行
-run: $(TARGET)
+# 构建并运行 (先清理，再编译，最后运行)
+run: clean $(TARGET)
 	./$(TARGET)
