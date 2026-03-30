@@ -161,6 +161,77 @@ def flash_attention_v1(Q, K, V, block_size_M, block_size_N):
 
 这样调整后，系统可以将一个巨大的 Q 块固定分配给特定的 Warp。这个 Warp 只需要自己闷头遍历 K 和 V 就能完成整行的 Attention 计算。Warp 之间不再需要频繁通信，大幅减少了 SRAM 的读写冲突（Shared Memory Traffic）。
 
+### 图示：V1 与 V2 的循环顺序对比
+
+```text
+FlashAttention-1                          FlashAttention-2
+─────────────────                         ─────────────────
+for j:  K_j, V_j 块                         for i:  Q_i 块
+    for i:  Q_i 块      ← 内层频繁换 Q           for j:  K_j, V_j 块  ← 内层扫完整条 KV
+        Online softmax                         Online softmax
+        (Warp 间要同步 m, l, O)                  (每个 Warp 独占一行块的 m, l, O)
+```
+
+### 图示：FlashAttention-2 的数据流（固定 Q 块、顺序扫 K/V）
+
+同一 Q 块驻留在 SRAM/寄存器中，沿序列维依次消费各 K、V 块；整行 Online Softmax 完成后，仅对输出做一次按行除法（归一化），减少内层循环里的标量除法。
+
+```text
+[ HBM ]                                              [ SRAM / 寄存器 ]
+                                                     
+  Q_i 块 ---- 一次加载，外层固定 ------------------>  Q_i 常驻
+                                                      |
+  K_j,V_j ---- j=0,1,2,... 内层依次加载 ----------->  S_ij = Q_i K_j^T
+                                                      |    Online: 更新 m, l
+                                                      |    累加 O_i（先不除 l）
+                                                      v
+  O[i:...] <--- 内层 j 结束后写回 ------------------  O_i ← O_i / l_i  （每行仅一次除法）
+```
+
+### 伪代码：FlashAttention-2（循环交换 + 行末归一化）
+
+下面与 V1 使用相同的 Online Softmax 数学，但**外层遍历 Q 块、内层遍历 K/V 块**；**把对输出的除法推迟到该 Q 块处理完所有 K/V 之后**，从而减少内层循环中的非矩阵乘法开销。
+
+```python
+def flash_attention_v2(Q, K, V, Br, Bc):
+    """
+    Q, K, V: [N, d]
+    Br: Q 方向块大小（行块）；Bc: K/V 方向块大小（列块）
+    """
+    N, d = Q.shape
+    O = zeros(N, d)
+
+    # 外层：Q 块 —— 与 V1 相反；便于 Warp 绑定行块、减少同步
+    for i in range(0, N, Br):
+        Qi = Q[i : i + Br]                    # [Br, d]
+        Oi = zeros(Br, d)
+        li = zeros(Br)
+        mi = full(Br, -inf)
+
+        # 内层：K,V 块 —— 顺序扫过整段序列
+        for j in range(0, N, Bc):
+            Kj = K[j : j + Bc]
+            Vj = V[j : j + Bc]
+
+            S_ij = Qi @ Kj.T                  # [Br, Bc]  GEMM，走 Tensor Core
+            m_row = max(S_ij, axis=1)         # 本块行内 max
+            m_new = maximum(mi, m_row)      # 逐元素 max，与历史全局 max 合并
+
+            # 数值稳定的 exp；P_ij 尚未除以最终 softmax 分母
+            P_ij = exp(S_ij - m_new[:, None])
+            li = li * exp(mi - m_new) + sum(P_ij, axis=1)
+            Oi = Oi * exp(mi - m_new)[:, None] + P_ij @ Vj
+
+            mi = m_new
+
+        # 该 Q 块对应的所有 K/V 块处理完毕后再归一化（减少内层除法）
+        O[i : i + Br, :] = Oi / li[:, None]
+
+    return O
+```
+
+说明：`maximum`、`exp`、`sum` 等为按行向量运算；真实实现还会融合掩码、变长序列、`scale = 1/sqrt(d)` 等，且 `li` 会加极小量避免除零。序列维并行体现在：不同的 `i` 区间（不同 Q 块）可派发到不同 SM/线程块同时执行。
+
 ## 5. 总结：性能演进的阶梯
 
 理解 Flash Attention 及其后续版本，本质上是理解算法与底层硬件（计算机体系结构）的深度绑定：
