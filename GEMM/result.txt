@@ -1,55 +1,58 @@
+rm -rf build
+mkdir -p build
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/main.cu -o build/main.o
+mkdir -p build/gemm
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v0_cublas.cu -o build/gemm/v0_cublas.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v1_naive.cu -o build/gemm/v1_naive.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v2_shared.cu -o build/gemm/v2_shared.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v3_register.cu -o build/gemm/v3_register.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v4_vectorized.cu -o build/gemm/v4_vectorized.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v5_bank_conflict.cu -o build/gemm/v5_bank_conflict.o
+nvcc -O3 -std=c++14 -arch=sm_70 -c src/gemm/v6_vec_bank.cu -o build/gemm/v6_vec_bank.o
+nvcc -O3 -std=c++14 -arch=sm_70 build/main.o build/gemm/v0_cublas.o build/gemm/v1_naive.o build/gemm/v2_shared.o build/gemm/v3_register.o build/gemm/v4_vectorized.o build/gemm/v5_bank_conflict.o build/gemm/v6_vec_bank.o -o build/benchmark_gemm -lcublas
+./build/benchmark_gemm
 ========================================================
 检测到显卡设备: NVIDIA GeForce RTX 5090 (Compute 12.0)
-SM 数量: 170, 核心频率: 2482 MHz
-理论 FP32 CUDA Core 峰值算力: 108.02 TFLOPs
+SM 数量: 170, 核心频率: 2407 MHz
+理论 FP32 CUDA Core 峰值算力: 104.75 TFLOPs
 ========================================================
 
 开始 GEMM 性能基准测试...
 矩阵尺寸: M=4096, N=4096, K=4096
 --------------------------------------------------------
-正在运行: cuBLAS SGEMM (Reference / Upper Bound)
+正在运行: v0_cublas (Reference)
   [正确性检查] 跳过 (作为标准参考答案).
-  [性能统计] 平均耗时: 2.058 ms
-  [算力吞吐] 实际算力: 66.772 TFLOPs (达理论峰值的 61.82%)
+  [性能统计] 平均耗时: 1.955 ms
+  [算力吞吐] 实际算力: 70.316 TFLOPs (达理论峰值的 67.13%)
 --------------------------------------------------------
-正在运行: SGEMM_Naive
+正在运行: v1_naive
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 18.288 ms
-  [算力吞吐] 实际算力: 7.515 TFLOPs (达理论峰值的 6.96%)
+  [性能统计] 平均耗时: 18.346 ms
+  [算力吞吐] 实际算力: 7.492 TFLOPs (达理论峰值的 7.15%)
 --------------------------------------------------------
-正在运行: SGEMM_SharedMemory
+正在运行: v2_shared
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 14.909 ms
-  [算力吞吐] 实际算力: 9.219 TFLOPs (达理论峰值的 8.53%)
+  [性能统计] 平均耗时: 14.882 ms
+  [算力吞吐] 实际算力: 9.235 TFLOPs (达理论峰值的 8.82%)
 --------------------------------------------------------
-正在运行: SGEMM_RegisterTiling
+正在运行: v3_register
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 3.073 ms
-  [算力吞吐] 实际算力: 44.722 TFLOPs (达理论峰值的 41.40%)
+  [性能统计] 平均耗时: 3.019 ms
+  [算力吞吐] 实际算力: 45.527 TFLOPs (达理论峰值的 43.46%)
 --------------------------------------------------------
-正在运行: SGEMM_RegisterTiling_V2
+正在运行: v4_vectorized
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 2.854 ms
-  [算力吞吐] 实际算力: 48.156 TFLOPs (达理论峰值的 44.58%)
+  [性能统计] 平均耗时: 3.106 ms
+  [算力吞吐] 实际算力: 44.250 TFLOPs (达理论峰值的 42.24%)
 --------------------------------------------------------
-正在运行: SGEMM_RegisterTiling_V3
+正在运行: v5_bank_conflict
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 2.909 ms
-  [算力吞吐] 实际算力: 47.251 TFLOPs (达理论峰值的 43.74%)
+  [性能统计] 平均耗时: 3.517 ms
+  [算力吞吐] 实际算力: 39.081 TFLOPs (达理论峰值的 37.31%)
 --------------------------------------------------------
-正在运行: SGEMM_RegisterTiling_BankConflict
+正在运行: v6_vec_bank
   [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 3.028 ms
-  [算力吞吐] 实际算力: 45.397 TFLOPs (达理论峰值的 42.03%)
---------------------------------------------------------
-正在运行: SGEMM_RegisterTiling_Vectorized
-  [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 3.151 ms
-  [算力吞吐] 实际算力: 43.622 TFLOPs (达理论峰值的 40.38%)
---------------------------------------------------------
-正在运行: SGEMM_RegisterTiling_VecBank
-  [正确性检查] 通过! (最大误差: 0.00)
-  [性能统计] 平均耗时: 3.274 ms
-  [算力吞吐] 实际算力: 41.976 TFLOPs (达理论峰值的 38.86%)
+  [性能统计] 平均耗时: 2.797 ms
+  [算力吞吐] 实际算力: 49.141 TFLOPs (达理论峰值的 46.91%)
 --------------------------------------------------------
 测试完成.
