@@ -82,3 +82,7 @@ $(BUILD_GEMM_DIR)/sgemm_register_vectorized.o: $(GEMM_DIR)/sgemm_register_vector
 # 清理编译产物
 clean:
 	rm -rf $(BUILD_DIR)
+
+# 构建并运行
+run: $(TARGET)
+	./$(TARGET)
