@@ -173,27 +173,27 @@ int main() {
     // 运行测试 (传入 peak_tflops)
     // ==========================================
 
-    // 0. cuBLAS 版本 (Reference)
-    benchmark_gemm("cuBLAS SGEMM (Reference / Upper Bound)", run_cublas, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, false, peak_tflops);
+    // v0: cuBLAS 版本 (Reference)
+    benchmark_gemm("v0_cublas (Reference)", run_cublas, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, false, peak_tflops);
     CHECK_CUDA(cudaMemcpy(h_C_ref.data(), d_C, size_C, cudaMemcpyDeviceToHost));
 
-    // 1. Naive 版本
-    benchmark_gemm("SGEMM_Naive", run_sgemm_naive, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
-    
-    // 2. Shared Memory 版本
-    benchmark_gemm("SGEMM_SharedMemory", run_sgemm_shared, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // v1: Naive 版本
+    benchmark_gemm("v1_naive", run_sgemm_naive, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3. Register Tiling 版本
-    benchmark_gemm("SGEMM_RegisterTiling", run_sgemm_register, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // v2: Shared Memory 版本
+    benchmark_gemm("v2_shared", run_sgemm_shared, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.7 Register Tiling 向量化访存优化版本 (Vectorized Loads/Stores)
-    benchmark_gemm("SGEMM_RegisterTiling_Vectorized", run_sgemm_register_vectorized, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // v3: Register Tiling 版本
+    benchmark_gemm("v3_register", run_sgemm_register, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.8 Register Tiling Bank Conflict 优化版本 (Shared Memory Padding)
-    benchmark_gemm("SGEMM_RegisterTiling_BankConflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // v4: 向量化访存优化版本 (Vectorized Loads/Stores)
+    benchmark_gemm("v4_vectorized", run_sgemm_register_vectorized, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
-    // 3.9 Register Tiling VecBank 版本 (Vectorized + Padding)
-    benchmark_gemm("SGEMM_RegisterTiling_VecBank", run_sgemm_register_vec_bank, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+    // v5: Bank Conflict 优化版本 (Shared Memory Padding)
+    benchmark_gemm("v5_bank_conflict", run_sgemm_register_bank_conflict, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
+
+    // v6: VecBank 版本 (Vectorized + Padding)
+    benchmark_gemm("v6_vec_bank", run_sgemm_register_vec_bank, M, N, K, alpha, d_A, d_B, beta, d_C, h_C_res, h_C_ref, true, peak_tflops);
 
     std::cout << "--------------------------------------------------------\n";
     std::cout << "测试完成." << std::endl;
