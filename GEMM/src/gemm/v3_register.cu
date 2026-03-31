@@ -3,6 +3,7 @@
 
 // ==========================================
 // 算子 3: 二维寄存器分块 GEMM (Register Tiling)
+// 优化版本：减少局部变量，降低寄存器压力
 // ==========================================
 
 // 定义分块大小
@@ -13,17 +14,6 @@
 #define TN 8    // Thread在N维度的负责大小
 
 __global__ void sgemm_register_kernel(int M, int N, int K, float alpha, const float *A, const float *B, float beta, float *C) {
-    // Block 索引
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-
-    // Thread 索引 (16x16 = 256 个线程 / Block)
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-
-    // 线程的全局一维 ID (Block内)
-    int tid = ty * blockDim.x + tx;
-
     // 1. 申请共享内存
     __shared__ float sA[BM][BK];
     __shared__ float sB[BK][BN];
@@ -33,28 +23,24 @@ __global__ void sgemm_register_kernel(int M, int N, int K, float alpha, const fl
     float accum[TM][TN] = {0.0f};
 
     // 计算当前线程负责的 C 矩阵元素的全局起始坐标
-    int row_start = by * BM + ty * TM;
-    int col_start = bx * BN + tx * TN;
+    int row_start = blockIdx.y * BM + threadIdx.y * TM;
+    int col_start = blockIdx.x * BN + threadIdx.x * TN;
 
-    // 预计算从全局内存搬运数据到共享内存时的坐标 (共 256 个线程协作)
-    // 搬运 A: 需要加载 128x8 = 1024 个元素，256个线程每个加载 4 个
-    int load_a_row = tid / BK; 
-    int load_a_col = tid % BK; 
-
-    // 搬运 B: 需要加载 8x128 = 1024 个元素，256个线程每个加载 4 个
-    int load_b_row = tid / BN; 
-    int load_b_col = tid % BN; 
+    // 计算线程的一维 ID (Block内) 用于协作加载
+    int tid = threadIdx.y * blockDim.x + threadIdx.x;
 
     // 3. 沿 K 维度分块滑动
     for (int k_step = 0; k_step < (K + BK - 1) / BK; ++k_step) {
         int k_offset = k_step * BK;
 
         // --- 步骤 A: 协作加载 A 块到 sA ---
+        // 计算从全局内存搬运数据到共享内存时的坐标
+        // 256个线程协作加载 128x8 = 1024 个元素，每个线程加载 4 个
         #pragma unroll
         for (int i = 0; i < BM * BK / 256; ++i) {
-            int a_row_idx = load_a_row + i * 32; // 256/8 = 32
-            int a_col_idx = load_a_col;
-            int global_a_row = by * BM + a_row_idx;
+            int a_row_idx = (tid / BK) + i * 32;  // tid / 8
+            int a_col_idx = tid % BK;             // tid % 8
+            int global_a_row = blockIdx.y * BM + a_row_idx;
             int global_a_col = k_offset + a_col_idx;
             if (global_a_row < M && global_a_col < K) {
                 sA[a_row_idx][a_col_idx] = A[global_a_row * K + global_a_col];
@@ -64,12 +50,13 @@ __global__ void sgemm_register_kernel(int M, int N, int K, float alpha, const fl
         }
 
         // --- 步骤 B: 协作加载 B 块到 sB ---
+        // 256个线程协作加载 8x128 = 1024 个元素，每个线程加载 4 个
         #pragma unroll
         for (int i = 0; i < BK * BN / 256; ++i) {
-            int b_row_idx = load_b_row + i * 2; // 256/128 = 2
-            int b_col_idx = load_b_col;
+            int b_row_idx = (tid / BN) + i * 2;   // tid / 128
+            int b_col_idx = tid % BN;             // tid % 128
             int global_b_row = k_offset + b_row_idx;
-            int global_b_col = bx * BN + b_col_idx;
+            int global_b_col = blockIdx.x * BN + b_col_idx;
             if (global_b_row < K && global_b_col < N) {
                 sB[b_row_idx][b_col_idx] = B[global_b_row * N + global_b_col];
             } else {
@@ -87,9 +74,9 @@ __global__ void sgemm_register_kernel(int M, int N, int K, float alpha, const fl
             float frag_b[TN];
 
             #pragma unroll
-            for (int i = 0; i < TM; ++i) frag_a[i] = sA[ty * TM + i][k];
+            for (int i = 0; i < TM; ++i) frag_a[i] = sA[threadIdx.y * TM + i][k];
             #pragma unroll
-            for (int j = 0; j < TN; ++j) frag_b[j] = sB[k][tx * TN + j];
+            for (int j = 0; j < TN; ++j) frag_b[j] = sB[k][threadIdx.x * TN + j];
 
             // 在寄存器中完成 8x8 的外积 (FFMA)
             #pragma unroll
